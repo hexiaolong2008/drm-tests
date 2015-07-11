@@ -19,34 +19,58 @@ void fill_bo(struct sp_bo *bo, uint8_t a, uint8_t r, uint8_t g, uint8_t b)
 	draw_rect(bo, 0, 0, bo->width, bo->height, a, r, g, b);
 }
 
+static uint8_t clampbyte(float f)
+{
+	if (f >= 255.0) return 255;
+	if (f <= 0.0) return 0;
+	return (uint8_t)f;
+}
+
 void draw_rect(struct sp_bo *bo, uint32_t x, uint32_t y, uint32_t width,
 		uint32_t height, uint8_t a, uint8_t r, uint8_t g, uint8_t b)
 {
 	uint32_t i, j, xmax = x + width, ymax = y + height;
+	uint8_t Y = 0, Cb = 0, Cr = 0;
 
 	if (xmax > bo->width)
 		xmax = bo->width;
 	if (ymax > bo->height)
 		ymax = bo->height;
 
+	if (bo->format == DRM_FORMAT_NV12 ||
+	    bo->format == DRM_FORMAT_NV21) {
+		Y = clampbyte(16 + 0.2567890625 * r + 0.50412890625 * g * 0.09790625);
+		Cb = clampbyte(128 - 0.14822265625 * r - 0.2909921875 * g + 0.43921484375 * b);
+		Cr = clampbyte(128 + 0.43921484375 * r - 0.3677890625 * g - 0.07142578125 * b);
+	}
+
 	for (i = y; i < ymax; i++) {
 		uint8_t *row = bo->map_addr + i * bo->pitch;
+		uint8_t *uvrow = bo->map_addr + bo->height * bo->pitch + (i >> 1) * bo->pitch;
 
 		for (j = x; j < xmax; j++) {
-			uint8_t *pixel = row + j * 4;
-
 			if (bo->format == DRM_FORMAT_ARGB8888 ||
 			    bo->format == DRM_FORMAT_XRGB8888)
 			{
+				uint8_t *pixel = row + j * 4;
 				pixel[0] = b;
 				pixel[1] = g;
 				pixel[2] = r;
 				pixel[3] = a;
 			} else if (bo->format == DRM_FORMAT_RGBA8888) {
+				uint8_t *pixel = row + j * 4;
 				pixel[0] = r;
 				pixel[1] = g;
 				pixel[2] = b;
 				pixel[3] = a;
+			} else if (bo->format == DRM_FORMAT_NV12) {
+				row[j] = Y;
+				uvrow[(j & ~1u)] = Cb;
+				uvrow[(j & ~1u) + 1] = Cr;
+			} else if (bo->format == DRM_FORMAT_NV21) {
+				row[j] = Y;
+				uvrow[(j & ~1u)] = Cr;
+				uvrow[(j & ~1u) + 1] = Cb;
 			}
 		}
 	}
@@ -60,6 +84,13 @@ static int add_fb_sp_bo(struct sp_bo *bo, uint32_t format)
 	handles[0] = bo->handle;
 	pitches[0] = bo->pitch;
 	offsets[0] = 0;
+	if (bo->format == DRM_FORMAT_NV12 ||
+	    bo->format == DRM_FORMAT_NV21) {
+		bo->height = (bo->height / 3) * 2;
+		handles[1] = bo->handle;
+		pitches[1] = bo->pitch;
+		offsets[1] = bo->height * bo->pitch;
+	}
 
 	ret = drmModeAddFB2(bo->dev->fd, bo->width, bo->height,
 			format, handles, pitches, offsets,

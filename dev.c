@@ -85,7 +85,14 @@ static struct sp_dev *create_sp_dev_from_name(char *name)
 
 	r = drmModeGetResources(dev->fd);
 	if (!r) {
-		printf("failed to get r\n");
+		printf("%s failed to get r\n", devPath);
+		goto err;
+	}
+
+	if (!r->count_crtcs ||
+	    !r->count_encoders ||
+	    !r->count_connectors) {
+		printf("%s no display resources\n", devPath);
 		goto err;
 	}
 
