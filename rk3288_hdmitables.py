@@ -190,30 +190,68 @@ def do_mpll_loop():
 	   mpll_cfg_table[rate][2][0], mpll_cfg_table[rate][2][1]),
   print
 
+def CLK_SLOP(clk): return ((clk) / 1000)
+def CLK_PLUS_SLOP(clk): return ((clk) + CLK_SLOP(clk))
+def CLK_MINUS_SLOP(clk): return ((clk) - CLK_SLOP(clk))
+
 def make_cur_ctr(rate, depth, pixel_rep=0):
   assert pixel_rep == 0, "Untested with non-zero pixel rep and probably wrong"
 
   tmds = (rate * depth) / 8. * (pixel_rep + 1)
 
-  if tmds <= RATE1:
-    return 0x18
-  elif tmds <= RATE2:
-    return 0x28
+  adjust_for_jittery_pll = True
 
-  # I have no idea why the below is true, but it is the simplest rule I could
-  # come up with that matched the tables...
-  if depth == 8:
-    if tmds <= 340000000:
-      # HDMI 1.4
+  # If the PIXEL clock (not the TMDS rate) is using the special 594 PLL
+  # and is slow enough, we can use normal rates...
+  if ((CLK_MINUS_SLOP(74250000) <= rate <= CLK_PLUS_SLOP(74250000)) or
+      (CLK_MINUS_SLOP(148500000) <= rate <= CLK_PLUS_SLOP(148500000))):
+    adjust_for_jittery_pll = False
+
+  # If rate is slow enough then our jitter isn't a huge issue.
+  # ...allowable clock jitter is 362.3 or higher and we're OK there w/ plenty of
+  # margin as long as we're careful about our PLL settings.
+  if rate <= 79000000:
+    adjust_for_jittery_pll = False
+
+  if not adjust_for_jittery_pll:
+    # This is as documented
+    if tmds <= RATE1:   # 46000000
+      return 0x18
+    elif tmds <= RATE2: # 92000000
+      return 0x28
+
+    # I have no idea why the below is true, but it is the simplest rule I could
+    # come up with that matched the tables...
+    if depth == 8:
+      if tmds <= 340000000:
+	# HDMI 1.4
+	return 0x38
+      # HDMI 2.0
+      return 0x18
+    elif depth == 16:
+      if tmds < 576000000:
+	return 0x38
+      return 0x28
+    else:
       return 0x38
-    # HDMI 2.0
+
+  # The output of rk3288 PLL is the source of the HDMI's MPLL.  Apparently
+  # the rk3288 PLL is too jittery.  We can lower the PLL bandwidth of MPLL
+  # to compensate.
+  #
+  # Where possible, we try to use the MPLL bandwidth suggested by Synopsis
+  # and we just use lower bandwidth when testing has shown that it's needed.
+  # We try to stick to 0x28 and 0x18 since those numbers are present in
+  # Synopsis tables.  We go down to 0x08 if needed and finally to 0x00.
+
+  if rate <= 79000000:
+    # Supposed to be 0x28 here, but we'll do 0x18 to reduce jitter
     return 0x18
-  elif depth == 16:
-    if tmds < 576000000:
-      return 0x38
-    return 0x28
-  else:
-    return 0x38
+  elif rate <= 118000000:
+    # Supposed to be 0x28/0x38 here, but we'll do 0x08 to reduce jitter
+    return 0x08
+  # Any higher clock rates go to bandwidth = 0
+  return 0
 
 def do_curr_ctrl_loop():
   cur_ctrl_table = {}
