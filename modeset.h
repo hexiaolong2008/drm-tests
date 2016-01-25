@@ -15,7 +15,7 @@ int set_sp_plane(struct sp_dev *dev, struct sp_plane *plane,
 
 #ifdef USE_ATOMIC_API
 int set_sp_plane_pset(struct sp_dev *dev, struct sp_plane *plane,
-		drmModePropertySetPtr pset, struct sp_crtc *crtc, int x, int y);
+		drmModeAtomicReqPtr pset, struct sp_crtc *crtc, int x, int y);
 #endif
 
 #endif /* __MODESET_H_INCLUDED__ */

@@ -171,7 +171,7 @@ int main(int argc, char * argv[])
 	bool import_to_handle = true;
 	bool import_foreign = true;
 
-	char c;
+	int c;
 	while ((c = getopt(argc, argv, optstr)) != -1) {
 		switch (c) {
 		case 'h':
