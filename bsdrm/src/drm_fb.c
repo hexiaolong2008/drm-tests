@@ -24,8 +24,11 @@ struct bs_drm_fb *bs_drm_fb_new(struct gbm_device *gbm, uint32_t width, uint32_t
 	assert(self);
 
 	self->bo = gbm_bo_create(gbm, width, height, format, flags);
-	if (self->bo == NULL)
+	if (self->bo == NULL) {
+		bs_debug_error("failed to create buffer object (w,h,format)=(%u,%u,%u)", width,
+			       height, format);
 		goto out_destroy;
+	}
 
 	uint32_t handle = gbm_bo_get_handle(self->bo).u32;
 	uint32_t stride = gbm_bo_get_stride(self->bo);
@@ -35,6 +38,7 @@ struct bs_drm_fb *bs_drm_fb_new(struct gbm_device *gbm, uint32_t width, uint32_t
 	    drmModeAddFB2(fd, width, height, format, &handle, &stride, &offset, &self->fb_id, 0);
 
 	if (ret) {
+		bs_debug_error("failed to create framebuffer from buffer object: %d", ret);
 		gbm_bo_destroy(self->bo);
 		goto out_destroy;
 	}

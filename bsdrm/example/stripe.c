@@ -10,19 +10,19 @@ int main()
 {
 	int fd = bs_drm_open_main_display();
 	if (fd < 0) {
-		fprintf(stderr, "failed to open card for display\n");
+		bs_debug_error("failed to open card for display");
 		return 1;
 	}
 
 	struct gbm_device *gbm = gbm_create_device(fd);
 	if (!gbm) {
-		fprintf(stderr, "failed to create gbm\n");
+		bs_debug_error("failed to create gbm");
 		return 1;
 	}
 
 	struct bs_drm_pipe pipe = {0};
 	if (!bs_drm_pipe_make(fd, &pipe)) {
-		fprintf(stderr, "failed to make pipe\n");
+		bs_debug_error("failed to make pipe");
 		return 1;
 	}
 
@@ -35,7 +35,7 @@ int main()
 		    bs_drm_fb_new(gbm, mode->hdisplay, mode->vdisplay, GBM_FORMAT_XRGB8888,
 				  GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
 		if (fbs[fb_index] == NULL) {
-			fprintf(stderr, "failed to make swap chain\n");
+			bs_debug_error("failed to make swap chain");
 			return 1;
 		}
 	}
@@ -57,7 +57,7 @@ int main()
 		    drmModeSetCrtc(fd, pipe.crtc_id, bs_drm_fb_id(fbs[fb_index]), 0 /* x */,
 				   0 /* y */, &pipe.connector_id, 1 /* connector count */, mode);
 		if (ret) {
-			fprintf(stderr, "failed to set crtc: %d\n", ret);
+			bs_debug_error("failed to set crtc: %d", ret);
 			return 1;
 		}
 		usleep(16667);

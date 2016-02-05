@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -24,6 +25,15 @@
 #include <gbm.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
+
+// debug.c
+__attribute__((format(printf, 5, 6))) void bs_debug_print(const char *prefix, const char *func,
+							  const char *file, int line,
+							  const char *format, ...);
+#define bs_debug_error(...)                                                         \
+	do {                                                                        \
+		bs_debug_print("ERROR", __func__, __FILE__, __LINE__, __VA_ARGS__); \
+	} while (0)
 
 // pipe.c
 typedef bool (*bs_make_pipe_piece)(void *context, void *out);
