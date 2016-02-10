@@ -17,7 +17,7 @@ Features
 - Allocates buffer objects with framebuffers
 - Dumb maps buffer objects
 
-Principles
+Goals
 ---
 (in order of priority)
 
@@ -28,6 +28,24 @@ Principles
 - 0 warnings from Clang or GCC
 - Make errors easy to debug
 - Fun
+
+Code Philosophy
+---
+- This library is meant to be consumed by applications, not other libraries
+- Applications usually can't recover from errors
+- Corollary: returning error codes to applications is a waste of programmer time
+- Badly behaving applications should fail fast
+- Asserts fail fast
+- Use asserts to make bad applications fail fast
+
+Naming Rules
+---
+- File names: <module name>.c
+- Functions: start with bs\_<name of file with extension>\_
+- Constructor functions: suffix with "new"
+- Destructor functions: suffix with "destroy"
+- Conversion functions: suffix with "create"
+- Functions that overload: put overload name at the very end
 
 Build Example
 ---
