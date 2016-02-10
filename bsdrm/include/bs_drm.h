@@ -51,13 +51,7 @@ struct bs_drm_pipe {
 bool bs_drm_pipe_make(int fd, struct bs_drm_pipe *pipe);
 
 // drm_fb.c
-struct bs_drm_fb;
-
-struct bs_drm_fb *bs_drm_fb_new(struct gbm_device *gbm, uint32_t width, uint32_t height,
-				uint32_t format, uint32_t flags);
-void bs_drm_fb_destroy(struct bs_drm_fb **);
-struct gbm_bo *bs_drm_fb_bo(struct bs_drm_fb *);
-uint32_t bs_drm_fb_id(struct bs_drm_fb *);
+uint32_t bs_drm_fb_create_gbm(struct gbm_bo *bo);
 
 // drm_open.c
 // Opens an arbitrary display's card.
