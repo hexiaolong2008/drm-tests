@@ -21,6 +21,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+#include <GLES2/gl2.h>
+#include <GLES2/gl2ext.h>
 #include <drm_fourcc.h>
 #include <gbm.h>
 #include <xf86drm.h>
@@ -64,6 +68,24 @@ int bs_drm_open_vgem();
 void *bs_dumb_mmap(int fd, uint32_t handle, size_t size);
 void *bs_dumb_mmap_gbm(struct gbm_bo *bo);
 int bs_dumb_unmmap_gbm(struct gbm_bo *bo, void *addr);
+
+// egl.c
+struct bs_egl;
+struct bs_egl_fb;
+
+struct bs_egl *bs_egl_new();
+void bs_egl_destroy(struct bs_egl **egl);
+bool bs_egl_setup(struct bs_egl *self);
+bool bs_egl_make_current(struct bs_egl *self);
+
+EGLImageKHR bs_egl_image_create(struct bs_egl *self, int prime_fd, int width, int height,
+				uint32_t format, int pitch, int offset);
+EGLImageKHR bs_egl_image_create_gbm(struct bs_egl *self, struct gbm_bo *bo);
+void bs_egl_image_destroy(struct bs_egl *self, EGLImageKHR *image);
+
+struct bs_egl_fb *bs_egl_fb_new(struct bs_egl *self, EGLImageKHR image);
+void bs_egl_fb_destroy(struct bs_egl_fb **fb);
+GLuint bs_egl_fb_name(struct bs_egl_fb *self);
 
 // app.c
 struct bs_app;
