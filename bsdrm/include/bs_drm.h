@@ -65,4 +65,17 @@ void *bs_dumb_mmap(int fd, uint32_t handle, size_t size);
 void *bs_dumb_mmap_gbm(struct gbm_bo *bo);
 int bs_dumb_unmmap_gbm(struct gbm_bo *bo, void *addr);
 
+// app.c
+struct bs_app;
+
+struct bs_app *bs_app_new();
+void bs_app_destroy(struct bs_app **app);
+int bs_app_fd(struct bs_app *self);
+size_t bs_app_fb_count(struct bs_app *self);
+void bs_app_set_fb_count(struct bs_app *self, size_t fb_count);
+struct gbm_bo *bs_app_fb_bo(struct bs_app *self, size_t index);
+uint32_t bs_app_fb_id(struct bs_app *self, size_t index);
+bool bs_app_setup(struct bs_app *self);
+int bs_app_display_fb(struct bs_app *self, size_t index);
+
 #endif
