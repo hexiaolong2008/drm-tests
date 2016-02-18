@@ -6,7 +6,7 @@ include common.mk
 
 CFLAGS += -std=gnu99 -I$(SRC)/bsdrm/include
 
-CC_STATIC_LIBRARY(bsdrm/libbsdrm.pic.a): \
+CC_STATIC_LIBRARY(libbsdrm.pic.a): \
   bsdrm/src/app.o \
   bsdrm/src/debug.o \
   bsdrm/src/drm_fb.o \

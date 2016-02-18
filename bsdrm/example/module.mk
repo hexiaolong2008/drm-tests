@@ -5,4 +5,4 @@
 include common.mk
 
 CC_BINARY(stripe): bsdrm/example/stripe.o \
-  CC_STATIC_LIBRARY(bsdrm/libbsdrm.pic.a)
+  CC_STATIC_LIBRARY(libbsdrm.pic.a)
