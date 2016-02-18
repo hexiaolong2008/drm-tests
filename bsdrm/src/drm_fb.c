@@ -36,7 +36,7 @@ uint32_t bs_drm_fb_create_gbm(struct gbm_bo *bo)
 
 	int fd = gbm_device_get_fd(gbm);
 	if (fd < 0) {
-		bs_debug_error("buffer object's device has invalud fd: %d", fd);
+		bs_debug_error("buffer object's device has invalid fd: %d", fd);
 		return 0;
 	}
 
