@@ -45,6 +45,26 @@ typedef bool (*bs_make_pipe_piece)(void *context, void *out);
 bool bs_pipe_make(void *context, bs_make_pipe_piece *pieces, size_t piece_count, void *out_pipe,
 		  size_t pipe_size);
 
+// open.c
+extern const uint32_t bs_open_rank_skip;
+
+// A return value of true causes enumeration to end immediately. fd is always
+// closed after the callback.
+typedef bool (*bs_open_enumerate_func)(void *user, int fd);
+
+// A return value of true causes the filter to return the given fd.
+typedef bool (*bs_open_filter_func)(int fd);
+
+// The fd with the lowest (magnitude) rank is returned. A fd with rank UINT32_MAX is skipped. A fd
+// with rank 0 ends the enumeration early and is returned. On a tie, the fd returned will be
+// arbitrarily chosen from the set of lowest rank fds.
+typedef uint32_t (*bs_open_rank_func)(int fd);
+
+void bs_open_enumerate(const char *format, unsigned start, unsigned end,
+		       bs_open_enumerate_func body, void *user);
+int bs_open_filtered(const char *format, unsigned start, unsigned end, bs_open_filter_func filter);
+int bs_open_ranked(const char *format, unsigned start, unsigned end, bs_open_rank_func rank);
+
 // drm_pipe.c
 struct bs_drm_pipe {
 	uint32_t connector_id;

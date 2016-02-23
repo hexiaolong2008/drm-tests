@@ -6,100 +6,6 @@
 
 #include "bs_drm.h"
 
-static const uint32_t kRankSkip = UINT32_MAX;
-
-// A return value of true causes enumeration to end immediately. fd is always
-// closed after the callback.
-typedef bool (*open_enumerate)(void *user, int fd);
-
-// A return value of true causes the filter to return the given fd.
-typedef bool (*open_filter)(int fd);
-
-// The fd with the lowest (magnitude) rank is returned. A fd with rank UINT32_MAX is skipped. A fd
-// with rank 0 ends the enumeration early and is returned. On a tie, the fd returned will be
-// arbitrarily chosen from the set of lowest rank fds.
-typedef uint32_t (*open_rank)(int fd);
-
-// Suppresses warnings for our usage of asprintf with one of the parameters.
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat-nonliteral"
-static void bs_drm_enumerate(const char *format, unsigned start, unsigned end, open_enumerate body,
-			     void *user)
-{
-	assert(end >= start);
-	for (unsigned dev_index = start; dev_index < end; dev_index++) {
-		char *file_path = NULL;
-		int ret = asprintf(&file_path, format, dev_index);
-		if (ret == -1)
-			return;
-		assert(file_path);
-
-		int fd = open(file_path, O_RDWR);
-		free(file_path);
-		if (fd < 0)
-			return;
-
-		bool end = body(user, fd);
-		close(fd);
-
-		if (end)
-			return;
-	}
-}
-#pragma GCC diagnostic pop
-
-struct bs_drm_open_filtered_user {
-	open_filter filter;
-	int fd;
-};
-
-static bool bs_drm_open_filtered_body(void *user, int fd)
-{
-	struct bs_drm_open_filtered_user *data = (struct bs_drm_open_filtered_user *)user;
-	if (data->filter(fd)) {
-		data->fd = dup(fd);
-		return true;
-	}
-
-	return false;
-}
-
-static int bs_drm_open_filtered(const char *format, unsigned start, unsigned end,
-				open_filter filter)
-{
-	struct bs_drm_open_filtered_user data = {filter, -1};
-	bs_drm_enumerate(format, start, end, bs_drm_open_filtered_body, &data);
-	return data.fd;
-}
-
-struct bs_drm_open_ranked_user {
-	open_rank rank;
-	uint32_t rank_index;
-	int fd;
-};
-
-static bool bs_drm_open_ranked_body(void *user, int fd)
-{
-	struct bs_drm_open_ranked_user *data = (struct bs_drm_open_ranked_user *)user;
-	uint32_t rank_index = data->rank(fd);
-
-	if (data->rank_index > rank_index) {
-		data->rank_index = rank_index;
-		if (data->fd >= 0)
-			close(data->fd);
-		data->fd = dup(fd);
-	}
-
-	return rank_index == 0;
-}
-
-static int bs_drm_open_ranked(const char *format, unsigned start, unsigned end, open_rank rank)
-{
-	struct bs_drm_open_ranked_user data = {rank, UINT32_MAX, -1};
-	bs_drm_enumerate(format, start, end, bs_drm_open_ranked_body, &data);
-	return data.fd;
-}
-
 static bool display_filter(int fd)
 {
 	bool has_connection = false;
@@ -130,7 +36,7 @@ out:
 
 int bs_drm_open_for_display()
 {
-	return bs_drm_open_filtered("/dev/dri/card%u", 0, DRM_MAX_MINOR, display_filter);
+	return bs_open_filtered("/dev/dri/card%u", 0, DRM_MAX_MINOR, display_filter);
 }
 
 static bool connector_has_crtc(int fd, drmModeRes *res, drmModeConnector *connector)
@@ -168,9 +74,9 @@ static uint32_t display_rank(int fd)
 {
 	drmModeRes *res = drmModeGetResources(fd);
 	if (!res)
-		return kRankSkip;
+		return bs_open_rank_skip;
 
-	uint32_t best_rank = kRankSkip;
+	uint32_t best_rank = bs_open_rank_skip;
 	if (res->count_crtcs == 0)
 		goto out;
 
@@ -199,7 +105,7 @@ out:
 
 int bs_drm_open_main_display()
 {
-	return bs_drm_open_ranked("/dev/dri/card%u", 0, DRM_MAX_MINOR, display_rank);
+	return bs_open_ranked("/dev/dri/card%u", 0, DRM_MAX_MINOR, display_rank);
 }
 
 static bool vgem_filter(int fd)
@@ -215,5 +121,5 @@ static bool vgem_filter(int fd)
 
 int bs_drm_open_vgem()
 {
-	return bs_drm_open_filtered("/dev/dri/card%u", 0, DRM_MAX_MINOR, vgem_filter);
+	return bs_open_filtered("/dev/dri/card%u", 0, DRM_MAX_MINOR, vgem_filter);
 }
