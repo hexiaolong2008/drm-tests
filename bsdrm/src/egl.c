@@ -188,7 +188,7 @@ EGLImageKHR bs_egl_image_create_gbm(struct bs_egl *self, struct gbm_bo *bo)
 		return EGL_NO_IMAGE_KHR;
 	}
 	return bs_egl_image_create(self, fd, gbm_bo_get_width(bo), gbm_bo_get_height(bo),
-				   gbm_bo_get_format(bo), gbm_bo_get_stride(bo), 0 /* no offset */);
+				   gbm_bo_get_format(bo), gbm_bo_get_stride_or_tiling(bo), 0 /* no offset */);
 }
 
 void bs_egl_image_destroy(struct bs_egl *self, EGLImageKHR *image)
