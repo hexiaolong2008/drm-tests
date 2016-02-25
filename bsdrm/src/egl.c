@@ -81,10 +81,13 @@ bool bs_egl_setup(struct bs_egl *self)
 
 	// Get any EGLConfig. We need one to create a context, but it isn't used to create any
 	// surfaces.
-	const EGLint config_attrib = EGL_NONE;
+	const EGLint config_attribs[] = {
+		EGL_SURFACE_TYPE, EGL_DONT_CARE,
+		EGL_NONE
+	};
 	EGLConfig egl_config;
 	EGLint num_configs;
-	if (!eglChooseConfig(self->display, &config_attrib, &egl_config, 1,
+	if (!eglChooseConfig(self->display, config_attribs, &egl_config, 1,
 			     &num_configs /* unused but can't be null */)) {
 		bs_debug_error("eglChooseConfig() failed with error: %s", get_egl_error());
 		goto terminate_display;
