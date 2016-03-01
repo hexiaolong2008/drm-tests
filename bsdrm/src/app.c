@@ -121,7 +121,7 @@ bool bs_app_setup(struct bs_app *self)
 		goto close_fd;
 	}
 
-	struct bs_drm_pipe pipe = {0};
+	struct bs_drm_pipe pipe = { 0 };
 	if (!bs_drm_pipe_make(self->fd, &pipe)) {
 		bs_debug_error("failed to make pipe");
 		goto destroy_device;

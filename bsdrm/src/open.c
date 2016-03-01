@@ -54,7 +54,7 @@ static bool bs_open_filtered_body(void *user, int fd)
 
 int bs_open_filtered(const char *format, unsigned start, unsigned end, bs_open_filter_func filter)
 {
-	struct bs_open_filtered_user data = {filter, -1};
+	struct bs_open_filtered_user data = { filter, -1 };
 	bs_open_enumerate(format, start, end, bs_open_filtered_body, &data);
 	return data.fd;
 }
@@ -82,7 +82,7 @@ static bool bs_open_ranked_body(void *user, int fd)
 
 int bs_open_ranked(const char *format, unsigned start, unsigned end, bs_open_rank_func rank)
 {
-	struct bs_open_ranked_user data = {rank, UINT32_MAX, -1};
+	struct bs_open_ranked_user data = { rank, UINT32_MAX, -1 };
 	bs_open_enumerate(format, start, end, bs_open_ranked_body, &data);
 	return data.fd;
 }

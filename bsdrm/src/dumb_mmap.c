@@ -10,7 +10,7 @@ void *bs_dumb_mmap(int fd, uint32_t handle, size_t size)
 {
 	assert(fd >= 0);
 
-	struct drm_mode_map_dumb mmap_arg = {0};
+	struct drm_mode_map_dumb mmap_arg = { 0 };
 
 	mmap_arg.handle = handle;
 

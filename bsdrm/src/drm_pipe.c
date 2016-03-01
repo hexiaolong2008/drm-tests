@@ -114,9 +114,9 @@ bool bs_drm_pipe_make(int fd, struct bs_drm_pipe *pipe)
 	if (res == NULL)
 		return false;
 
-	struct pipe_ctx ctx = {fd, res};
-	struct pipe_internal pipe_internal = {0};
-	bs_make_pipe_piece pieces[] = {pipe_piece_connector, pipe_piece_encoder, pipe_piece_crtc};
+	struct pipe_ctx ctx = { fd, res };
+	struct pipe_internal pipe_internal = { 0 };
+	bs_make_pipe_piece pieces[] = { pipe_piece_connector, pipe_piece_encoder, pipe_piece_crtc };
 	bool success = bs_pipe_make(&ctx, pieces, sizeof(pieces) / sizeof(pieces[0]),
 				    &pipe_internal, sizeof(struct pipe_internal));
 	if (!success)

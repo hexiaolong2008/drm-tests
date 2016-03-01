@@ -95,7 +95,7 @@ bool bs_egl_setup(struct bs_egl *self)
 		goto terminate_display;
 	}
 
-	const EGLint context_attribs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
+	const EGLint context_attribs[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
 
 	self->ctx = eglCreateContext(self->display, egl_config,
 				     EGL_NO_CONTEXT /* no shared context */, context_attribs);
@@ -153,19 +153,19 @@ EGLImageKHR bs_egl_image_create(struct bs_egl *self, int prime_fd, int width, in
 	assert(self);
 	assert(self->CreateImageKHR);
 	assert(self->display != EGL_NO_DISPLAY);
-	const EGLint khr_image_attrs[] = {EGL_DMA_BUF_PLANE0_FD_EXT,
-					  prime_fd,
-					  EGL_WIDTH,
-					  width,
-					  EGL_HEIGHT,
-					  height,
-					  EGL_LINUX_DRM_FOURCC_EXT,
-					  (int)format,
-					  EGL_DMA_BUF_PLANE0_PITCH_EXT,
-					  pitch,
-					  EGL_DMA_BUF_PLANE0_OFFSET_EXT,
-					  offset,
-					  EGL_NONE};
+	const EGLint khr_image_attrs[] = { EGL_DMA_BUF_PLANE0_FD_EXT,
+					   prime_fd,
+					   EGL_WIDTH,
+					   width,
+					   EGL_HEIGHT,
+					   height,
+					   EGL_LINUX_DRM_FOURCC_EXT,
+					   (int)format,
+					   EGL_DMA_BUF_PLANE0_PITCH_EXT,
+					   pitch,
+					   EGL_DMA_BUF_PLANE0_OFFSET_EXT,
+					   offset,
+					   EGL_NONE };
 
 	EGLImageKHR image =
 	    self->CreateImageKHR(self->display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT,
