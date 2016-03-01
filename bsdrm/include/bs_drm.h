@@ -110,6 +110,20 @@ struct bs_egl_fb *bs_egl_fb_new(struct bs_egl *self, EGLImageKHR image);
 void bs_egl_fb_destroy(struct bs_egl_fb **fb);
 GLuint bs_egl_fb_name(struct bs_egl_fb *self);
 
+// gl.c
+// The entry after the last valid binding should have name == NULL. The binding array is terminated
+// by a NULL name.
+struct bs_gl_program_create_binding {
+	// These parameters are passed to glBindAttribLocation
+	GLuint index;
+	const GLchar *name;
+};
+
+GLuint bs_gl_shader_create(GLenum type, const GLchar *src);
+// bindings can be NULL.
+GLuint bs_gl_program_create_vert_frag_bind(const GLchar *vert_src, const GLchar *frag_src,
+					   struct bs_gl_program_create_binding *bindings);
+
 // app.c
 struct bs_app;
 

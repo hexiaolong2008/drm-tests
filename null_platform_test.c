@@ -6,37 +6,9 @@
 
 #include "bs_drm.h"
 
-GLuint shader_create(GLenum type, const GLchar *src)
+static GLuint solid_shader_create()
 {
-	GLuint shader = glCreateShader(type);
-	if (!shader) {
-		bs_debug_error("failed to create shader");
-		return 0;
-	}
-
-	glShaderSource(shader, 1, &src, NULL);
-	glCompileShader(shader);
-
-	GLint status;
-	glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
-	if (status == GL_FALSE) {
-		GLint log_len = 0;
-		glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &log_len);
-		char *shader_log = calloc(log_len, sizeof(char));
-		assert(shader_log);
-		glGetShaderInfoLog(shader, log_len, NULL, shader_log);
-		bs_debug_error("failed to compile shader: %s", shader_log);
-		free(shader_log);
-		glDeleteShader(shader);
-		return 0;
-	}
-
-	return shader;
-}
-
-GLuint solid_shader_create()
-{
-	const GLchar *vertex_shader_str =
+	const GLchar *vert =
 	    "attribute vec4 vPosition;\n"
 	    "attribute vec4 vColor;\n"
 	    "varying vec4 vFillColor;\n"
@@ -45,59 +17,18 @@ GLuint solid_shader_create()
 	    "  vFillColor = vColor;\n"
 	    "}\n";
 
-	const GLchar *fragment_shader_str =
+	const GLchar *frag =
 	    "precision mediump float;\n"
 	    "varying vec4 vFillColor;\n"
 	    "void main() {\n"
 	    "  gl_FragColor = vFillColor;\n"
 	    "}\n";
 
-	GLuint program = glCreateProgram();
-	if (!program) {
-		bs_debug_error("failed to create program");
-		return 0;
-	}
+	struct bs_gl_program_create_binding bindings[] = {
+		{ 0, "vPosition" }, { 1, "vColor" }, { 0, NULL },
+	};
 
-	GLuint vert_shader = shader_create(GL_VERTEX_SHADER, vertex_shader_str);
-	if (!vert_shader) {
-		bs_debug_error("failed to create vertex shader");
-		glDeleteProgram(program);
-		return 0;
-	}
-
-	GLuint frag_shader = shader_create(GL_FRAGMENT_SHADER, fragment_shader_str);
-	if (!frag_shader) {
-		bs_debug_error("failed to create fragment shader");
-		glDeleteShader(vert_shader);
-		glDeleteProgram(program);
-		return 0;
-	}
-
-	glAttachShader(program, vert_shader);
-	glAttachShader(program, frag_shader);
-	glBindAttribLocation(program, 0, "vPosition");
-	glBindAttribLocation(program, 1, "vColor");
-	glLinkProgram(program);
-	glDetachShader(program, vert_shader);
-	glDetachShader(program, frag_shader);
-	glDeleteShader(vert_shader);
-	glDeleteShader(frag_shader);
-
-	GLint status;
-	glGetProgramiv(program, GL_LINK_STATUS, &status);
-	if (!status) {
-		GLint log_len = 0;
-		glGetProgramiv(program, GL_INFO_LOG_LENGTH, &log_len);
-		char *program_log = calloc(log_len, sizeof(char));
-		assert(program_log);
-		glGetProgramInfoLog(program, log_len, NULL, program_log);
-		bs_debug_error("failed to link program: %s", program_log);
-		free(program_log);
-		glDeleteProgram(program);
-		return 0;
-	}
-
-	return program;
+	return bs_gl_program_create_vert_frag_bind(vert, frag, bindings);
 }
 
 static float f(int i)
@@ -151,7 +82,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	struct bs_drm_pipe pipe = {0};
+	struct bs_drm_pipe pipe = { 0 };
 	if (!bs_drm_pipe_make(fd, &pipe)) {
 		bs_debug_error("failed to make pipe");
 		return 1;
@@ -251,8 +182,8 @@ int main(int argc, char **argv)
 
 		while (waiting_for_flip) {
 			drmEventContext evctx = {
-			    .version = DRM_EVENT_CONTEXT_VERSION,
-			    .page_flip_handler = page_flip_handler,
+				.version = DRM_EVENT_CONTEXT_VERSION,
+				.page_flip_handler = page_flip_handler,
 			};
 
 			fd_set fds;
