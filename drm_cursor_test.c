@@ -8,6 +8,20 @@
 
 int main(int argc, char **argv)
 {
+	uint32_t cursor_size = 64;
+	if (argc >= 2) {
+		char *end_str;
+		unsigned long new_cursor_size = strtoul(argv[1], &end_str, 0);
+		if (end_str == argv[1] || new_cursor_size == 0 || new_cursor_size > UINT32_MAX) {
+			printf(
+			    "usage:\n  drm_cursor_test [cursor size]\n\nCursor size defaults to "
+			    "%u\n",
+			    cursor_size);
+			return 1;
+		}
+		cursor_size = (uint32_t)new_cursor_size;
+	}
+
 	int fd = bs_drm_open_main_display();
 	if (fd < 0) {
 		bs_debug_error("failed to open card for display");
@@ -75,7 +89,6 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	const uint32_t cursor_size = 64;
 	struct gbm_bo *cursor_bo =
 	    gbm_bo_create(gbm, cursor_size, cursor_size, GBM_FORMAT_ARGB8888, GBM_BO_USE_CURSOR);
 	if (!cursor_bo) {
