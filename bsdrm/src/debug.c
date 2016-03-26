@@ -16,3 +16,13 @@ void bs_debug_print(const char *prefix, const char *func, const char *file, int 
 	fprintf(stderr, "\n");
 	va_end(args);
 }
+
+int64_t bs_debug_gettime_ns()
+{
+	struct timespec t;
+	int ret = clock_gettime(CLOCK_MONOTONIC, &t);
+	if (ret)
+		return -1;
+	const int64_t billion = 1000000000;
+	return (int64_t)t.tv_nsec + (int64_t)t.tv_sec * billion;
+}

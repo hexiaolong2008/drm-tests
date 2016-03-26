@@ -19,6 +19,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <EGL/egl.h>
@@ -38,6 +39,8 @@ __attribute__((format(printf, 5, 6))) void bs_debug_print(const char *prefix, co
 	do {                                                                        \
 		bs_debug_print("ERROR", __func__, __FILE__, __LINE__, __VA_ARGS__); \
 	} while (0)
+
+int64_t bs_debug_gettime_ns();
 
 // pipe.c
 typedef bool (*bs_make_pipe_piece)(void *context, void *out);
