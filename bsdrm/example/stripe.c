@@ -8,26 +8,24 @@
 
 int main()
 {
-	int fd = bs_drm_open_main_display();
-	if (fd < 0) {
-		bs_debug_error("failed to open card for display");
+	drmModeConnector *connector;
+	struct bs_drm_pipe pipe = { 0 };
+	struct bs_drm_pipe_plumber *plumber = bs_drm_pipe_plumber_new();
+	bs_drm_pipe_plumber_connector_ptr(plumber, &connector);
+	if (!bs_drm_pipe_plumber_make(plumber, &pipe)) {
+		bs_debug_error("failed to make pipe");
 		return 1;
 	}
+	bs_drm_pipe_plumber_destroy(&plumber);
+
+	int fd = pipe.fd;
+	drmModeModeInfo *mode = &connector->modes[0];
 
 	struct gbm_device *gbm = gbm_create_device(fd);
 	if (!gbm) {
 		bs_debug_error("failed to create gbm");
 		return 1;
 	}
-
-	struct bs_drm_pipe pipe = {0};
-	if (!bs_drm_pipe_make(fd, &pipe)) {
-		bs_debug_error("failed to make pipe");
-		return 1;
-	}
-
-	drmModeConnector *connector = drmModeGetConnector(fd, pipe.connector_id);
-	drmModeModeInfo *mode = &connector->modes[0];
 
 	struct gbm_bo *bos[2];
 	uint32_t ids[2];
@@ -72,6 +70,11 @@ int main()
 		gbm_bo_destroy(bos[fb_index]);
 		drmModeRmFB(fd, ids[fb_index]);
 	}
+
+	gbm_device_destroy(gbm);
+
+	drmModeFreeConnector(connector);
+	close(fd);
 
 	return 0;
 }

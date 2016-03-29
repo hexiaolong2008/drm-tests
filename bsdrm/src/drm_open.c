@@ -74,9 +74,9 @@ static uint32_t display_rank(int fd)
 {
 	drmModeRes *res = drmModeGetResources(fd);
 	if (!res)
-		return bs_open_rank_skip;
+		return bs_rank_skip;
 
-	uint32_t best_rank = bs_open_rank_skip;
+	uint32_t best_rank = bs_rank_skip;
 	if (res->count_crtcs == 0)
 		goto out;
 

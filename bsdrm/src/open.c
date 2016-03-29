@@ -6,8 +6,6 @@
 
 #include "bs_drm.h"
 
-const uint32_t bs_open_rank_skip = UINT32_MAX;
-
 // Suppresses warnings for our usage of asprintf with one of the parameters.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"

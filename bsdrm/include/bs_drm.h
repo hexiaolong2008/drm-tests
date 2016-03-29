@@ -31,6 +31,8 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
+#define bs_rank_skip UINT32_MAX
+
 // debug.c
 __attribute__((format(printf, 5, 6))) void bs_debug_print(const char *prefix, const char *func,
 							  const char *file, int line,
@@ -49,7 +51,6 @@ bool bs_pipe_make(void *context, bs_make_pipe_piece *pieces, size_t piece_count,
 		  size_t pipe_size);
 
 // open.c
-extern const uint32_t bs_open_rank_skip;
 
 // A return value of true causes enumeration to end immediately. fd is always
 // closed after the callback.
@@ -68,13 +69,51 @@ void bs_open_enumerate(const char *format, unsigned start, unsigned end,
 int bs_open_filtered(const char *format, unsigned start, unsigned end, bs_open_filter_func filter);
 int bs_open_ranked(const char *format, unsigned start, unsigned end, bs_open_rank_func rank);
 
+// drm_connectors.c
+#define bs_drm_connectors_any UINT32_MAX
+
+// Interleaved arrays in the layout { DRM_MODE_CONNECTOR_*, rank, DRM_MODE_CONNECTOR_*, rank, ... },
+// terminated by { ... 0, 0 }. bs_drm_connectors_any can be used in place of DRM_MODE_CONNECTOR_* to
+// match any connector. bs_rank_skip can be used in place of a rank to indicate that that connector
+// should be skipped.
+
+// Use internal connectors and fallback to any connector
+extern const uint32_t bs_drm_connectors_main_rank[];
+// Use only internal connectors
+extern const uint32_t bs_drm_connectors_internal_rank[];
+// Use only external connectors
+extern const uint32_t bs_drm_connectors_external_rank[];
+
+uint32_t bs_drm_connectors_rank(const uint32_t *ranks, uint32_t connector_type);
+
 // drm_pipe.c
 struct bs_drm_pipe {
+	int fd;  // Always owned by the user of this library
 	uint32_t connector_id;
 	uint32_t encoder_id;
 	uint32_t crtc_id;
 };
+struct bs_drm_pipe_plumber;
 
+// A class that makes pipes with certain constraints.
+struct bs_drm_pipe_plumber *bs_drm_pipe_plumber_new();
+void bs_drm_pipe_plumber_destroy(struct bs_drm_pipe_plumber **);
+// Takes ranks in the rank array format from drm_connectors.c. Lifetime of connector_ranks must
+// exceed the plumber
+void bs_drm_pipe_plumber_connector_ranks(struct bs_drm_pipe_plumber *,
+					 const uint32_t *connector_ranks);
+// crtc_mask is in the same format as drmModeEncoder.possible_crtcs
+void bs_drm_pipe_plumber_crtc_mask(struct bs_drm_pipe_plumber *, uint32_t crtc_mask);
+// Sets which card fd the plumber should use. The fd remains owned by the caller. If left unset,
+// bs_drm_pipe_plumber_make will try all available cards.
+void bs_drm_pipe_plumber_fd(struct bs_drm_pipe_plumber *, int card_fd);
+// Sets a pointer to store the chosen connector in after a succesful call to
+// bs_drm_pipe_plumber_make. It's optional, but calling drmModeGetConnector yourself can be slow.
+void bs_drm_pipe_plumber_connector_ptr(struct bs_drm_pipe_plumber *, drmModeConnector **ptr);
+// Makes the pipe based on the constraints of the plumber. Returns false if no pipe worked.
+bool bs_drm_pipe_plumber_make(struct bs_drm_pipe_plumber *, struct bs_drm_pipe *pipe);
+
+// Makes any pipe that will work for the given card fd. Returns false if no pipe worked.
 bool bs_drm_pipe_make(int fd, struct bs_drm_pipe *pipe);
 
 // drm_fb.c
