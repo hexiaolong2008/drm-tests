@@ -4,55 +4,40 @@
  * found in the LICENSE file.
  */
 
-#include <errno.h>
-#include <fcntl.h>
+#include "bs_drm.h"
+
 #include <getopt.h>
 #include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <string.h>
-#include <xf86drm.h>
-#include <xf86drmMode.h>
-#include <drm_fourcc.h>
 
-#include "bo.h"
-#include "dev.h"
+#define TABLE_LINEAR 0
+#define TABLE_NEGATIVE 1
+#define TABLE_POW 2
+#define TABLE_STEP 3
 
-#define TABLE_LINEAR			0
-#define TABLE_NEGATIVE			1
-#define TABLE_POW			2
-#define TABLE_STEP			3
+#define FLAG_INTERNAL 'i'
+#define FLAG_EXTERNAL 'e'
+#define FLAG_GAMMA 'g'
+#define FLAG_LINEAR 'l'
+#define FLAG_NEGATIVE 'n'
+#define FLAG_TIME 't'
+#define FLAG_CRTCS 'c'
+#define FLAG_PERSIST 'p'
+#define FLAG_STEP 's'
+#define FLAG_HELP 'h'
 
-#define FLAG_INTERNAL			'i'
-#define FLAG_EXTERNAL			'e'
-#define FLAG_GAMMA			'g'
-#define FLAG_LINEAR			'l'
-#define FLAG_NEGATIVE			'n'
-#define FLAG_TIME			't'
-#define FLAG_CRTCS			'c'
-#define FLAG_PERSIST			'p'
-#define FLAG_STEP			's'
-#define FLAG_HELP			'h'
+static struct option command_options[] = { { "internal", no_argument, NULL, FLAG_INTERNAL },
+					   { "external", no_argument, NULL, FLAG_EXTERNAL },
+					   { "gamma", required_argument, NULL, FLAG_GAMMA },
+					   { "linear", no_argument, NULL, FLAG_LINEAR },
+					   { "negative", no_argument, NULL, FLAG_NEGATIVE },
+					   { "time", required_argument, NULL, FLAG_TIME },
+					   { "crtcs", required_argument, NULL, FLAG_CRTCS },
+					   { "persist", no_argument, NULL, FLAG_PERSIST },
+					   { "step", no_argument, NULL, FLAG_STEP },
+					   { "help", no_argument, NULL, FLAG_HELP },
+					   { NULL, 0, NULL, 0 } };
 
-static struct option command_options[] = {
-	{ "internal", no_argument, NULL, FLAG_INTERNAL },
-	{ "external", no_argument, NULL, FLAG_EXTERNAL },
-	{ "gamma", required_argument, NULL, FLAG_GAMMA },
-	{ "linear", no_argument, NULL, FLAG_LINEAR },
-	{ "negative", no_argument, NULL, FLAG_NEGATIVE },
-	{ "time", required_argument, NULL, FLAG_TIME },
-	{ "crtcs", required_argument, NULL, FLAG_CRTCS },
-	{ "persist", no_argument, NULL, FLAG_PERSIST },
-	{ "step", no_argument, NULL, FLAG_STEP },
-	{ "help", no_argument, NULL, FLAG_HELP },
-	{ NULL, 0, NULL, 0 }
-};
-
-static void
-gamma_linear(uint16_t *table, int size)
+static void gamma_linear(uint16_t *table, int size)
 {
 	int i;
 	for (i = 0; i < size; i++) {
@@ -62,8 +47,7 @@ gamma_linear(uint16_t *table, int size)
 	}
 }
 
-static void
-gamma_inv(uint16_t *table, int size)
+static void gamma_inv(uint16_t *table, int size)
 {
 	int i;
 	for (i = 0; i < size; i++) {
@@ -73,8 +57,7 @@ gamma_inv(uint16_t *table, int size)
 	}
 }
 
-static void
-gamma_pow(uint16_t *table, int size, float p)
+static void gamma_pow(uint16_t *table, int size, float p)
 {
 	int i;
 	for (i = 0; i < size; i++) {
@@ -85,8 +68,7 @@ gamma_pow(uint16_t *table, int size, float p)
 	}
 }
 
-static void
-gamma_step(uint16_t *table, int size)
+static void gamma_step(uint16_t *table, int size)
 {
 	int i;
 	for (i = 0; i < size; i++) {
@@ -94,180 +76,126 @@ gamma_step(uint16_t *table, int size)
 	}
 }
 
-
-static void
-fsleep(double secs)
+static void fsleep(double secs)
 {
 	usleep((useconds_t)(1000000.0f * secs));
 }
 
-static int
-is_internal(uint32_t connector_type)
+static drmModeModeInfoPtr find_best_mode(int mode_count, drmModeModeInfoPtr modes)
 {
-	return connector_type == DRM_MODE_CONNECTOR_LVDS ||
-	       connector_type == DRM_MODE_CONNECTOR_eDP ||
-	       connector_type == DRM_MODE_CONNECTOR_DSI;
+	assert(mode_count >= 0);
+	if (mode_count == 0)
+		return NULL;
+
+	assert(modes);
+
+	for (int m = 0; m < mode_count; m++)
+		if (modes[m].type & DRM_MODE_TYPE_PREFERRED)
+			return &modes[m];
+
+	return &modes[0];
 }
 
-int
-find_connector_for_encoder(int fd, drmModeRes *resources, uint32_t encoder_id,
-			   int internal, uint32_t *connector_id)
+static bool draw_pattern(struct gbm_bo *bo)
 {
-	drmModeConnector *connector;
-	int c, e;
-	int found = 0;
-	printf("looking for connector for encoder %u\n", encoder_id);
-	for (c = 0; c < resources->count_connectors && !found; c++) {
-		if (!(connector = drmModeGetConnector(fd, resources->connectors[c])))
-			continue;
-		printf("trying connector %u connected:%u, modes:%u, type:%u\n",
-		       connector->connector_id, connector->connection,
-		       connector->count_modes, connector->connector_type);
-		if (connector->connection == DRM_MODE_CONNECTED &&
-		    connector->count_modes > 0 &&
-		    internal == is_internal(connector->connector_type)) {
-			for (e = 0; e < connector->count_encoders; e++)
-				if (connector->encoders[e] == encoder_id) {
-					*connector_id = connector->connector_id;
-					found = 1;
-					break;
-				}
-		}
-		drmModeFreeConnector(connector);
+	const uint32_t stride = gbm_bo_get_stride(bo);
+	const uint32_t height = gbm_bo_get_height(bo);
+	const uint32_t bo_size = stride * height;
+	const uint32_t stripw = gbm_bo_get_width(bo) / 256;
+	const uint32_t striph = height / 4;
+
+	uint8_t *bo_ptr = bs_dumb_mmap_gbm(bo);
+	if (!bo_ptr) {
+		bs_debug_error("failed to mmap buffer while drawing pattern");
+		return false;
 	}
-	return found;
-}
 
-int
-find_connector_encoder(int fd, drmModeRes *resources, uint32_t crtc_id,
-		       int internal, uint32_t *encoder_id,
-		       uint32_t *connector_id)
-{
-	int found = 0;
-	drmModeEncoder *encoder;
-	int e, c;
+	bool success = true;
 
-	for (e = 0; e < resources->count_encoders && !found; e++) {
-		if ((encoder = drmModeGetEncoder(fd,
-						 resources->encoders[e]))) {
-			printf("trying encoder %u for crtc %u\n",
-			       encoder->encoder_id, crtc_id);
-			for (c = 0; c < resources->count_crtcs; c++) {
-				printf("possible crtcs:%08X\n", encoder->possible_crtcs);
-				if (encoder->possible_crtcs & (1u << c) &&
-				    resources->crtcs[c] == crtc_id) {
-					found =
-					find_connector_for_encoder(fd,
-								   resources,
-								   encoder->encoder_id,
-								   internal,
-								   connector_id);
-					if (found) {
-						*encoder_id = encoder->encoder_id;
-						break;
-					}
+	memset(bo_ptr, 0, bo_size);
+	for (uint32_t s = 0; s < 4; s++) {
+		uint8_t r = 0, g = 0, b = 0;
+		switch (s) {
+			case 0:
+				r = g = b = 1;
+				break;
+			case 1:
+				r = 1;
+				break;
+			case 2:
+				g = 1;
+				break;
+			case 3:
+				b = 1;
+				break;
+			default:
+				assert("invalid strip" && false);
+				success = false;
+				goto out;
+		}
+		for (uint32_t y = s * striph; y < (s + 1) * striph; y++) {
+			uint8_t *row_ptr = &bo_ptr[y * stride];
+			for (uint32_t i = 0; i < 256; i++) {
+				for (uint32_t x = i * stripw; x < (i + 1) * stripw; x++) {
+					row_ptr[x * 4 + 0] = b * i;
+					row_ptr[x * 4 + 1] = g * i;
+					row_ptr[x * 4 + 2] = r * i;
+					row_ptr[x * 4 + 3] = 0;
 				}
 			}
 		}
-		drmModeFreeEncoder(encoder);
 	}
 
-	if (!found) {
-		fprintf(stderr,
-			"Could not find active %s connectors for crtc:%u\n",
-			internal?"internal":"external", crtc_id);
-	}
-
-	return found;
+out:
+	bs_dumb_unmmap_gbm(bo, bo_ptr);
+	return success;
 }
 
-int
-find_best_mode(int fd, uint32_t connector_id, drmModeModeInfoPtr mode)
-{
-	int m;
-	int found = 0;
-	drmModeConnector *connector;
-
-	connector = drmModeGetConnector(fd, connector_id);
-	if (!connector)
-		return 0;
-
-	for (m = 0; m < connector->count_modes && !found; m++) {
-		if (connector->modes[m].type & DRM_MODE_TYPE_PREFERRED) {
-			*mode = connector->modes[m];
-			found = 1;
-		}
-	}
-
-	if (!found) {
-		*mode = connector->modes[0];
-		found = 1;
-	}
-	drmModeFreeConnector(connector);
-	return found;
-}
-
-static void
-draw_pattern(struct sp_bo *bo)
-{
-	uint32_t stripw = bo->width / 256;
-	uint32_t striph = bo->height / 4;
-	uint32_t x;
-
-	fill_bo(bo, 0, 0, 0, 0);
-	for (x = 0; x < 256; x++) {
-		draw_rect(bo, x*stripw, 0, stripw, striph, 0, x, x, x);
-		draw_rect(bo, x*stripw, striph, stripw, striph, 0, x, 0, 0);
-		draw_rect(bo, x*stripw, striph*2, stripw, striph, 0, 0, x, 0);
-		draw_rect(bo, x*stripw, striph*3, stripw, striph, 0, 0, 0, x);
-	}
-}
-
-static int
-set_gamma(int fd, drmModeCrtc *crtc, int gamma_table, float gamma)
+static int set_gamma(int fd, uint32_t crtc_id, int gamma_size, int gamma_table, float gamma)
 {
 	int res;
 	uint16_t *r, *g, *b;
-	r = calloc(crtc->gamma_size, sizeof(*r));
-	g = calloc(crtc->gamma_size, sizeof(*g));
-	b = calloc(crtc->gamma_size, sizeof(*b));
+	r = calloc(gamma_size, sizeof(*r));
+	g = calloc(gamma_size, sizeof(*g));
+	b = calloc(gamma_size, sizeof(*b));
 
 	printf("Setting gamma table %d\n", gamma_table);
 	switch (gamma_table) {
 		case TABLE_LINEAR:
-			gamma_linear(r, crtc->gamma_size);
-			gamma_linear(g, crtc->gamma_size);
-			gamma_linear(b, crtc->gamma_size);
+			gamma_linear(r, gamma_size);
+			gamma_linear(g, gamma_size);
+			gamma_linear(b, gamma_size);
 			break;
 		case TABLE_NEGATIVE:
-			gamma_inv(r, crtc->gamma_size);
-			gamma_inv(g, crtc->gamma_size);
-			gamma_inv(b, crtc->gamma_size);
+			gamma_inv(r, gamma_size);
+			gamma_inv(g, gamma_size);
+			gamma_inv(b, gamma_size);
 			break;
 		case TABLE_POW:
-			gamma_pow(r, crtc->gamma_size, gamma);
-			gamma_pow(g, crtc->gamma_size, gamma);
-			gamma_pow(b, crtc->gamma_size, gamma);
+			gamma_pow(r, gamma_size, gamma);
+			gamma_pow(g, gamma_size, gamma);
+			gamma_pow(b, gamma_size, gamma);
 			break;
 		case TABLE_STEP:
-			gamma_step(r, crtc->gamma_size);
-			gamma_step(g, crtc->gamma_size);
-			gamma_step(b, crtc->gamma_size);
+			gamma_step(r, gamma_size);
+			gamma_step(g, gamma_size);
+			gamma_step(b, gamma_size);
 			break;
 	}
 
-	res = drmModeCrtcSetGamma(fd, crtc->crtc_id, crtc->gamma_size, r, g, b);
-	if (res != 0) {
-		fprintf(stderr, "drmModeCrtcSetGamma(%d) failed: %s\n",
-			crtc->crtc_id, strerror(errno));
-	}
-	free(r); free(g); free(b);
+	res = drmModeCrtcSetGamma(fd, crtc_id, gamma_size, r, g, b);
+	if (res)
+		bs_debug_error("drmModeCrtcSetGamma(%d) failed: %s", crtc_id, strerror(errno));
+	free(r);
+	free(g);
+	free(b);
 	return res;
 }
 
 void help(void)
 {
-	printf("\
+	printf(
+	    "\
 gamma test\n\
 command line options:\
 \n\
@@ -286,18 +214,15 @@ command line options:\
 
 int main(int argc, char **argv)
 {
-	drmModeRes *resources;
-	struct sp_dev *dev;
 	int internal = 1;
 	int persist = 0;
 	float time = 5.0;
 	float gamma = 2.2f;
 	float table = TABLE_LINEAR;
-	unsigned int crtcs = 0xFFFF;
-	int c;
+	uint32_t crtcs = 0xFFFF;
 
 	for (;;) {
-		c = getopt_long(argc, argv, "", command_options, NULL);
+		int c = getopt_long(argc, argv, "", command_options, NULL);
 
 		if (c == -1)
 			break;
@@ -346,104 +271,132 @@ int main(int argc, char **argv)
 		}
 	}
 
-	dev = create_sp_dev();
-	if (!dev) {
-		fprintf(stderr, "Creating DRM device failed\n");
+	drmModeConnector *connector = NULL;
+	struct bs_drm_pipe pipe = { 0 };
+	struct bs_drm_pipe_plumber *plumber = bs_drm_pipe_plumber_new();
+	bs_drm_pipe_plumber_connector_ptr(plumber, &connector);
+	bs_drm_pipe_plumber_crtc_mask(plumber, crtcs);
+	if (!internal)
+		bs_drm_pipe_plumber_connector_ranks(plumber, bs_drm_connectors_external_rank);
+	if (!bs_drm_pipe_plumber_make(plumber, &pipe)) {
+		bs_debug_error("failed to make pipe");
 		return 1;
 	}
 
-	resources = drmModeGetResources(dev->fd);
+	int fd = pipe.fd;
+	bs_drm_pipe_plumber_fd(plumber, fd);
+	drmModeRes *resources = drmModeGetResources(fd);
 	if (!resources) {
-		fprintf(stderr, "drmModeGetResources failed: %s\n",
-			strerror(errno));
+		bs_debug_error("failed to get drm resources");
 		return 1;
 	}
 
-	for (c = 0; c < resources->count_crtcs; c++) {
+	struct gbm_device *gbm = gbm_create_device(fd);
+	if (!gbm) {
+		bs_debug_error("failed to create gbm");
+		return 1;
+	}
+
+	for (int c = 0; c < resources->count_crtcs && (crtcs >> c); c++) {
 		int ret;
 		drmModeCrtc *crtc;
-		drmModeModeInfo mode;
-		uint32_t encoder_id, connector_id;
-		struct sp_bo *bo;
+		uint32_t crtc_mask = 1u << c;
 
-		if (!(crtcs & (1u << c))) continue;
-
-		crtc = drmModeGetCrtc(dev->fd, resources->crtcs[c]);
-		if (!crtc) {
-			fprintf(stderr, "drmModeGetCrtc(%d) failed: %s\n",
-				resources->crtcs[c], strerror(errno));
+		if (!(crtcs & crtc_mask))
 			continue;
+
+		if (connector != NULL) {
+			drmModeFreeConnector(connector);
+			connector = NULL;
 		}
 
-		printf("CRTC:%d gamma size:%d\n", crtc->crtc_id,
-		       crtc->gamma_size);
-
-		if (!crtc->gamma_size) {
-			fprintf(stderr, "CRTC %d has no gamma table\n",
-				crtc->crtc_id);
-			drmModeFreeCrtc(crtc);
-			continue;
-		}
-
-		if (!find_connector_encoder(dev->fd, resources, crtc->crtc_id,
-					    internal, &encoder_id,
-					    &connector_id)) {
-			fprintf(stderr,
-				"Could not find connector and encoder for CRTC %d\n",
-				crtc->crtc_id);
-			drmModeFreeCrtc(crtc);
-			continue;
-		}
-		printf("Using CRTC:%u ENCODER:%u CONNECTOR:%u\n",
-		       crtc->crtc_id, encoder_id, connector_id);
-
-		if (!find_best_mode(dev->fd, connector_id, &mode)) {
-			fprintf(stderr, "Could not find mode for CRTC %d\n",
-			        crtc->crtc_id);
-			drmModeFreeCrtc(crtc);
-			continue;
-		}
-		printf("Using mode %s\n", mode.name);
-
-		printf("Creating buffer %ux%u\n", mode.hdisplay, mode.vdisplay);
-		bo = create_sp_bo(dev, mode.hdisplay, mode.vdisplay, 24, 32,
-				  DRM_FORMAT_XRGB8888, 0);
-
-		draw_pattern(bo);
-
-		ret = drmModeSetCrtc(dev->fd, crtc->crtc_id, bo->fb_id, 0, 0,
-				     &connector_id, 1, &mode);
-		if (ret < 0) {
-			fprintf(stderr, "Could not set mode on CRTC %d %s\n",
-				crtc->crtc_id, strerror(errno));
+		bs_drm_pipe_plumber_crtc_mask(plumber, crtc_mask);
+		if (!bs_drm_pipe_plumber_make(plumber, &pipe)) {
+			bs_debug_error("failed to make pipe with crtc mask: %x", crtc_mask);
 			return 1;
 		}
 
-		ret = set_gamma(dev->fd, crtc, table, gamma);
-		if (ret != 0) {
-			return ret;
+		crtc = drmModeGetCrtc(fd, pipe.crtc_id);
+		if (!crtc) {
+			bs_debug_error("drmModeGetCrtc(%d) failed: %s\n", pipe.crtc_id,
+				       strerror(errno));
+			return 1;
 		}
+		int gamma_size = crtc->gamma_size;
+		drmModeFreeCrtc(crtc);
+
+		if (!gamma_size) {
+			bs_debug_error("CRTC %d has no gamma table", crtc->crtc_id);
+			continue;
+		}
+
+		printf("CRTC:%d gamma size:%d\n", pipe.crtc_id, gamma_size);
+
+		printf("Using CRTC:%u ENCODER:%u CONNECTOR:%u\n", pipe.crtc_id, pipe.encoder_id,
+		       pipe.connector_id);
+
+		drmModeModeInfoPtr mode = find_best_mode(connector->count_modes, connector->modes);
+		if (!mode) {
+			bs_debug_error("Could not find mode for CRTC %d", pipe.crtc_id);
+			continue;
+		}
+
+		printf("Using mode %s\n", mode->name);
+
+		printf("Creating buffer %ux%u\n", mode->hdisplay, mode->vdisplay);
+		struct gbm_bo *bo =
+		    gbm_bo_create(gbm, mode->hdisplay, mode->vdisplay, GBM_FORMAT_XRGB8888, 0);
+		if (!bo) {
+			bs_debug_error("failed to create buffer object");
+			return 1;
+		}
+
+		uint32_t fb_id = bs_drm_fb_create_gbm(bo);
+		if (!fb_id) {
+			bs_debug_error("failed to create frame buffer for buffer object");
+			return 1;
+		}
+
+		if (!draw_pattern(bo)) {
+			bs_debug_error("failed to draw pattern on buffer object");
+			return 1;
+		}
+
+		ret = drmModeSetCrtc(fd, pipe.crtc_id, fb_id, 0, 0, &pipe.connector_id, 1, mode);
+		if (ret < 0) {
+			bs_debug_error("Could not set mode on CRTC %d %s", pipe.crtc_id,
+				       strerror(errno));
+			return 1;
+		}
+
+		ret = set_gamma(fd, pipe.crtc_id, gamma_size, table, gamma);
+		if (ret)
+			return ret;
 
 		fsleep(time);
 
 		if (!persist) {
-			ret = set_gamma(dev->fd, crtc, TABLE_LINEAR, 0.0f);
-			if (ret != 0) {
+			ret = set_gamma(fd, pipe.crtc_id, gamma_size, TABLE_LINEAR, 0.0f);
+			if (ret)
 				return ret;
-			}
 		}
 
-		ret = drmModeSetCrtc(dev->fd, crtc->crtc_id, 0, 0, 0, NULL, 0,
-				     NULL);
+		ret = drmModeSetCrtc(fd, pipe.crtc_id, 0, 0, 0, NULL, 0, NULL);
 		if (ret < 0) {
-			fprintf(stderr, "Could disable CRTC %d %s\n",
-				crtc->crtc_id, strerror(errno));
+			bs_debug_error("Could disable CRTC %d %s\n", pipe.crtc_id, strerror(errno));
 		}
-		free_sp_bo(bo);
+
+		drmModeRmFB(fd, fb_id);
+		gbm_bo_destroy(bo);
+	}
+
+	if (connector != NULL) {
+		drmModeFreeConnector(connector);
+		connector = NULL;
 	}
 
 	drmModeFreeResources(resources);
-
+	bs_drm_pipe_plumber_destroy(&plumber);
 
 	return 0;
 }
