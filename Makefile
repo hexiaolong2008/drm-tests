@@ -38,5 +38,5 @@ CC_BINARY(atomictest): LDLIBS += $(DRM_LIBS)
 CC_BINARY(gamma_test): gamma_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 CC_BINARY(gamma_test): LDLIBS += -lm $(DRM_LIBS)
 
-CC_BINARY(nv12_test): nv12_test.o dev.o bo.o modeset.o
+CC_BINARY(nv12_test): nv12_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 CC_BINARY(nv12_test): LDLIBS += -lm $(DRM_LIBS)
