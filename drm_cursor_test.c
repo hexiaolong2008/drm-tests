@@ -59,7 +59,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	uint8_t *fb_ptr = bs_dumb_mmap_gbm(fb_bo);
+	uint8_t *fb_ptr = bs_dma_buf_mmap(fb_bo);
 	if (fb_ptr == NULL) {
 		bs_debug_error("failed to mmap frame buffer object");
 		return 1;
@@ -74,7 +74,7 @@ int main(int argc, char **argv)
 			fb_ptr[y * stride + x * 4 + 3] = 0;
 		}
 	}
-	bs_dumb_unmmap_gbm(fb_bo, fb_ptr);
+	bs_dma_buf_unmmap(fb_bo, fb_ptr);
 
 	uint32_t fb_id = bs_drm_fb_create_gbm(fb_bo);
 	if (!fb_id) {
@@ -96,7 +96,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	uint8_t *cursor_ptr = bs_dumb_mmap_gbm(cursor_bo);
+	uint8_t *cursor_ptr = bs_dma_buf_mmap(cursor_bo);
 	if (cursor_ptr == NULL) {
 		bs_debug_error("failed to mmap cursor buffer object");
 		return 1;
@@ -109,7 +109,7 @@ int main(int argc, char **argv)
 			       4);
 		}
 	}
-	bs_dumb_unmmap_gbm(cursor_bo, cursor_ptr);
+	bs_dma_buf_unmmap(cursor_bo, cursor_ptr);
 
 	ret = drmModeSetCursor(fd, crtc_id, gbm_bo_get_handle(cursor_bo).u32, cursor_size,
 			       cursor_size);

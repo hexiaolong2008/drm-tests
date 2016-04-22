@@ -128,8 +128,10 @@ int bs_drm_open_vgem();
 
 // dumb_mmap.c
 void *bs_dumb_mmap(int fd, uint32_t handle, size_t size);
-void *bs_dumb_mmap_gbm(struct gbm_bo *bo);
-int bs_dumb_unmmap_gbm(struct gbm_bo *bo, void *addr);
+
+// dma_buf.c
+void *bs_dma_buf_mmap(struct gbm_bo *bo);
+int bs_dma_buf_unmmap(struct gbm_bo *bo, void *addr);
 
 // egl.c
 struct bs_egl;

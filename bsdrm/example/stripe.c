@@ -48,14 +48,14 @@ int main()
 		size_t fb_index = frame_index % 2;
 		struct gbm_bo *bo = bos[fb_index];
 		size_t bo_size = gbm_bo_get_stride(bo) * mode->vdisplay;
-		char *ptr = bs_dumb_mmap_gbm(bo);
+		char *ptr = bs_dma_buf_mmap(bo);
 		for (size_t i = 0; i < bo_size / 4; i++) {
 			ptr[i * 4 + 0] = (i + frame_index * 50) % 256;
 			ptr[i * 4 + 1] = (i + frame_index * 50 + 85) % 256;
 			ptr[i * 4 + 2] = (i + frame_index * 50 + 170) % 256;
 			ptr[i * 4 + 3] = 0;
 		}
-		bs_dumb_unmmap_gbm(bo, ptr);
+		bs_dma_buf_unmmap(bo, ptr);
 
 		int ret = drmModeSetCrtc(fd, pipe.crtc_id, ids[fb_index], 0 /* x */, 0 /* y */,
 					 &pipe.connector_id, 1 /* connector count */, mode);

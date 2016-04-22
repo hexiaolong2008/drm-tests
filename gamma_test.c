@@ -104,7 +104,7 @@ static bool draw_pattern(struct gbm_bo *bo)
 	const uint32_t stripw = gbm_bo_get_width(bo) / 256;
 	const uint32_t striph = height / 4;
 
-	uint8_t *bo_ptr = bs_dumb_mmap_gbm(bo);
+	uint8_t *bo_ptr = bs_dma_buf_mmap(bo);
 	if (!bo_ptr) {
 		bs_debug_error("failed to mmap buffer while drawing pattern");
 		return false;
@@ -147,7 +147,7 @@ static bool draw_pattern(struct gbm_bo *bo)
 	}
 
 out:
-	bs_dumb_unmmap_gbm(bo, bo_ptr);
+	bs_dma_buf_unmmap(bo, bo_ptr);
 	return success;
 }
 

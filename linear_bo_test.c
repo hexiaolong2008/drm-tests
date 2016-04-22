@@ -212,28 +212,19 @@ out:
 	return success;
 }
 
-static bool test_case_draw_vgem(int vgem_fd, const struct test_case *tcase, struct gbm_bo *bo)
+static bool test_case_draw_dma_buf(const struct test_case *tcase, struct gbm_bo *bo)
 {
 	int bo_fd = gbm_bo_get_fd(bo);
 	if (bo_fd < 0) {
 		bs_debug_error("failed to get fd of bo");
 		return false;
 	}
-	uint32_t vgem_handle;
-	int ret = drmPrimeFDToHandle(vgem_fd, bo_fd, &vgem_handle);
-	if (ret) {
-		bs_debug_error("failed to convert prime fd to vgem handle: %d", ret);
-		return false;
-	}
 	uint32_t width = gbm_bo_get_width(bo);
 	uint32_t height = gbm_bo_get_height(bo);
 	uint32_t stride = gbm_bo_get_stride(bo);
-	uint32_t bo_size = height * stride;
-	uint8_t *ptr = bs_dumb_mmap(vgem_fd, vgem_handle, bo_size);
+	uint8_t *ptr = bs_dma_buf_mmap(bo);
 	if (!ptr) {
-		bs_debug_error("failed to mmap vgem handle");
-		struct drm_gem_close gem_close = { vgem_handle, 0 };
-		drmIoctl(vgem_fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
+		bs_debug_error("failed to mmap gbm bo");
 		return false;
 	}
 
@@ -268,9 +259,7 @@ static bool test_case_draw_vgem(int vgem_fd, const struct test_case *tcase, stru
 		}
 	}
 
-	munmap(ptr, bo_size);
-	struct drm_gem_close gem_close = { vgem_handle, 0 };
-	drmIoctl(vgem_fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
+	bs_dma_buf_unmmap(bo, ptr);
 
 	return true;
 }
@@ -292,12 +281,6 @@ int main(int argc, char **argv)
 	int display_fd = bs_drm_open_main_display();
 	if (display_fd < 0) {
 		bs_debug_error("failed to open card for display");
-		return 1;
-	}
-
-	int vgem_fd = bs_drm_open_vgem();
-	if (vgem_fd < 0) {
-		bs_debug_error("failed to open vgem card");
 		return 1;
 	}
 
@@ -350,12 +333,11 @@ int main(int argc, char **argv)
 		}
 
 		if (tcase->usage & GBM_BO_USE_LINEAR) {
-			if (!test_case_draw_vgem(vgem_fd, tcase, bo)) {
+			if (!test_case_draw_dma_buf(tcase, bo)) {
 				bs_debug_error("failed to draw to buffer using vgem");
 				return 1;
 			}
-		}
-		else if (tcase->usage & GBM_BO_USE_RENDERING) {
+		} else if (tcase->usage & GBM_BO_USE_RENDERING) {
 			if (!test_case_draw_gl(egl, tcase, bo)) {
 				bs_debug_error("failed to draw to buffer using GL");
 				return 1;

@@ -51,6 +51,7 @@ Build Example
 ---
 Define `CC` `CFLAGS` and `LDFLAGS` for your device. Then run the following from the top level directory:
 ```
+${CC} ${CFLAGS} -c src/dma_buf.c -o dma_buf.o || exit 1
 ${CC} ${CFLAGS} -c src/drm_fb.c -o drm_fb.o || exit 1
 ${CC} ${CFLAGS} -c src/drm_open.c -o drm_open.o || exit 1
 ${CC} ${CFLAGS} -c src/drm_pipe.c -o drm_pipe.o || exit 1
@@ -59,6 +60,7 @@ ${CC} ${CFLAGS} -c src/pipe.c -o pipe.o || exit 1
 ${CC} ${CFLAGS} -c example/stripe.c -o stripe.o || exit 1
 ${CC} ${LDFLAGS} \
     pipe.o \
+    dma_buf.o \
     drm_pipe.o \
     drm_fb.o \
     drm_open.o \
