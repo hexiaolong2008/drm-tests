@@ -1,8 +1,10 @@
 /*
- * Copyright 2014 The Chromium OS Authors. All rights reserved.
+ * Copyright 2017 The Chromium OS Authors. All rights reserved.
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+
+#include <getopt.h>
 
 #include "bs_drm.h"
 
@@ -10,9 +12,13 @@
 
 struct framebuffer {
 	struct gbm_bo *bo;
+	int drm_prime_fd;
 	uint32_t vgem_handle;
 	uint32_t id;
 };
+
+struct context;
+typedef uint32_t *(*mmap_t)(struct context *ctx, struct framebuffer *fb, size_t size);
 
 struct context {
 	int display_fd;
@@ -20,9 +26,10 @@ struct context {
 	uint32_t crtc_id;
 
 	struct framebuffer fbs[BUFFERS];
+	mmap_t mmap_fn;
 };
 
-void disable_psr()
+static void disable_psr()
 {
 	const char psr_path[] = "/sys/module/i915/parameters/enable_psr";
 	int psr_fd = open(psr_path, O_WRONLY);
@@ -32,15 +39,14 @@ void disable_psr()
 
 	if (write(psr_fd, "0", 1) == -1) {
 		bs_debug_error("failed to disable psr");
-	}
-	else {
+	} else {
 		printf("disabled psr");
 	}
 
 	close(psr_fd);
 }
 
-void do_fixes()
+static void do_fixes()
 {
 	disable_psr();
 }
@@ -51,7 +57,7 @@ void do_fixes()
 #define STEP_FLIP 3
 #define STEP_DRAW 4
 
-void show_sequence(const int *sequence)
+static void show_sequence(const int *sequence)
 {
 	int sequence_subindex;
 	printf("starting sequence: ");
@@ -81,7 +87,7 @@ void show_sequence(const int *sequence)
 	printf("\n");
 }
 
-void draw(struct context *ctx)
+static void draw(struct context *ctx)
 {
 	// Run the drawing routine with the key driver events in different
 	// sequences.
@@ -109,8 +115,7 @@ void draw(struct context *ctx)
 			for (sequence_subindex = 0; sequence_subindex < 4; sequence_subindex++) {
 				switch (sequences[sequence_index][sequence_subindex]) {
 					case STEP_MMAP:
-						bo_ptr = bs_dumb_mmap(ctx->vgem_fd, fb->vgem_handle,
-								      bo_size);
+						bo_ptr = ctx->mmap_fn(ctx, fb, bo_size);
 						ptr = bo_ptr;
 						break;
 
@@ -159,9 +164,85 @@ void draw(struct context *ctx)
 	}
 }
 
+static int create_vgem(struct context *ctx)
+{
+	ctx->vgem_fd = bs_drm_open_vgem();
+	if (ctx->vgem_fd < 0)
+		return 1;
+	return 0;
+}
+
+static int vgem_prime_fd_to_handle(struct context *ctx, struct framebuffer *fb)
+{
+	int ret = drmPrimeFDToHandle(ctx->vgem_fd, fb->drm_prime_fd, &fb->vgem_handle);
+	if (ret)
+		return 1;
+	return 0;
+}
+
+static uint32_t *vgem_mmap_internal(struct context *ctx, struct framebuffer *fb, size_t size)
+{
+	return bs_dumb_mmap(ctx->vgem_fd, fb->vgem_handle, size);
+}
+
+static uint32_t *dma_buf_mmap_internal(struct context *ctx, struct framebuffer *fb, size_t size)
+{
+	return bs_dma_buf_mmap(fb->bo);
+}
+
+static const struct option longopts[] = {
+	{ "help", no_argument, NULL, 'h' },
+	{ "use_vgem", no_argument, NULL, 'v' },
+	{ "use_dma_buf", no_argument, NULL, 'd' },
+	{ 0, 0, 0, 0 },
+};
+
+static void print_help(const char *argv0)
+{
+	const char help_text[] =
+	    "Usage: %s [OPTIONS]\n"
+	    " -h, --help\n"
+	    "           Print help.\n"
+	    " -d, --use_dma_buf\n"
+	    "           Use dma_buf mmap.\n"
+	    " -v, --use_vgem\n"
+	    "           Use vgem mmap.\n";
+	printf(help_text, argv0);
+}
+
 int main(int argc, char **argv)
 {
 	struct context ctx = { 0 };
+
+	bool is_vgem_test = false;
+	bool is_help = false;
+	ctx.mmap_fn = dma_buf_mmap_internal;
+	int c;
+	while ((c = getopt_long(argc, argv, "vdh", longopts, NULL)) != -1) {
+		switch (c) {
+			case 'v':
+				ctx.mmap_fn = vgem_mmap_internal;
+				is_vgem_test = true;
+				break;
+			case 'd':
+				break;
+			case 'h':
+			default:
+				is_help = true;
+				break;
+		}
+	}
+
+	if (is_help) {
+		print_help(argv[0]);
+		return 1;
+	}
+
+	if (is_vgem_test) {
+		printf("started vgem mmap test.\n");
+	} else {
+		printf("started dma_buf mmap test.\n");
+	}
 
 	do_fixes();
 
@@ -171,8 +252,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	ctx.vgem_fd = bs_drm_open_vgem();
-	if (ctx.vgem_fd < 0) {
+	if (is_vgem_test && create_vgem(&ctx)) {
 		bs_debug_error("failed to open vgem card");
 		return 1;
 	}
@@ -211,15 +291,13 @@ int main(int argc, char **argv)
 			return 1;
 		}
 
-		int drm_prime_fd = gbm_bo_get_fd(fb->bo);
-
-		if (drm_prime_fd < 0) {
+		fb->drm_prime_fd = gbm_bo_get_fd(fb->bo);
+		if (fb->drm_prime_fd < 0) {
 			bs_debug_error("failed to turn handle into fd");
 			return 1;
 		}
 
-		int ret = drmPrimeFDToHandle(ctx.vgem_fd, drm_prime_fd, &fb->vgem_handle);
-		if (ret) {
+		if (is_vgem_test && vgem_prime_fd_to_handle(&ctx, fb)) {
 			bs_debug_error("failed to import handle");
 			return 1;
 		}

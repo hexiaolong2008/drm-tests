@@ -20,12 +20,12 @@ all: \
 	CC_BINARY(drm_cursor_test) \
 	CC_BINARY(gamma_test) \
 	CC_BINARY(linear_bo_test) \
+	CC_BINARY(mmap_test) \
 	CC_BINARY(null_platform_test) \
 	CC_BINARY(plane_test) \
 	CC_BINARY(stripe) \
 	CC_BINARY(swrast_test) \
 	CC_BINARY(tiled_bo_test) \
-	CC_BINARY(vgem_fb_test) \
 	CC_BINARY(vgem_test)
 
 ifeq ($(USE_VULKAN),1)
@@ -38,7 +38,7 @@ CC_BINARY(null_platform_test): null_platform_test.o CC_STATIC_LIBRARY(libbsdrm.p
 CC_BINARY(null_platform_test): LDLIBS += $(DRM_LIBS)
 
 CC_BINARY(vgem_test): vgem_test.o
-CC_BINARY(vgem_fb_test): vgem_fb_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
+CC_BINARY(mmap_test): mmap_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 
 CC_BINARY(linear_bo_test): linear_bo_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 CC_BINARY(linear_bo_test): LDLIBS += -lGLESv2
