@@ -52,8 +52,9 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	struct gbm_bo *fb_bo = gbm_bo_create(gbm, mode->hdisplay, mode->vdisplay,
-					     GBM_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT);
+	struct gbm_bo *fb_bo =
+	    gbm_bo_create(gbm, mode->hdisplay, mode->vdisplay, GBM_FORMAT_XRGB8888,
+			  GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR);
 	if (!fb_bo) {
 		bs_debug_error("failed to create buffer object for frame buffer");
 		return 1;

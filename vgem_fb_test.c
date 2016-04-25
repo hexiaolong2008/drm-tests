@@ -198,7 +198,7 @@ int main(int argc, char **argv)
 	for (size_t fb_index = 0; fb_index < BUFFERS; ++fb_index) {
 		struct framebuffer *fb = &ctx.fbs[fb_index];
 		fb->bo = gbm_bo_create(gbm, mode->hdisplay, mode->vdisplay, GBM_FORMAT_XRGB8888,
-				       GBM_BO_USE_SCANOUT);
+				       GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR);
 
 		if (!fb->bo) {
 			bs_debug_error("failed to create buffer object");
