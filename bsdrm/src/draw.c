@@ -25,6 +25,17 @@ struct bs_draw_format {
 	struct draw_format_component components[MAX_COMPONENTS];
 };
 
+struct draw_data {
+	uint32_t x;
+	uint32_t y;
+	uint32_t w;
+	uint32_t h;
+	float progress;
+	uint8_t out_color[MAX_COMPONENTS];
+};
+
+typedef void (*compute_color_t)(struct draw_data *data);
+
 #define PIXEL_FORMAT_AND_NAME(x) GBM_FORMAT_##x, #x
 static const struct bs_draw_format bs_draw_formats[] = {
 	{
@@ -123,12 +134,12 @@ static size_t mmap_planes(struct bs_mapper *mapper, struct gbm_bo *bo,
 	return num_planes;
 }
 
-bool bs_draw_pattern(struct bs_mapper *mapper, struct gbm_bo *bo,
-		     const struct bs_draw_format *format)
+static bool draw_color(struct bs_mapper *mapper, struct gbm_bo *bo,
+		       const struct bs_draw_format *format, struct draw_data *data,
+		       compute_color_t compute_color_fn)
 {
-	const uint32_t width = gbm_bo_get_width(bo);
-	const uint32_t height = gbm_bo_get_height(bo);
-	const uint32_t striph = height / 4;
+	data->w = gbm_bo_get_width(bo);
+	data->h = gbm_bo_get_height(bo);
 
 	struct draw_plane planes[GBM_MAX_PLANES];
 	size_t num_planes = mmap_planes(mapper, bo, planes);
@@ -137,53 +148,95 @@ bool bs_draw_pattern(struct bs_mapper *mapper, struct gbm_bo *bo,
 		return false;
 	}
 
-	for (uint32_t s = 0; s < 4; s++) {
-		uint8_t r = 0, g = 0, b = 0;
-		switch (s) {
-			case 0:
-				r = g = b = 1;
-				break;
-			case 1:
-				r = 1;
-				break;
-			case 2:
-				g = 1;
-				break;
-			case 3:
-				b = 1;
-				break;
-			default:
-				r = g = b = 0;
-				break;
+	for (uint32_t y = 0; y < data->h; y++) {
+		uint8_t *rows[MAX_COMPONENTS] = { 0 };
+		for (size_t comp_index = 0; comp_index < format->component_count; comp_index++) {
+			const struct draw_format_component *comp = &format->components[comp_index];
+			struct draw_plane *plane = &planes[comp->plane_index];
+			rows[comp_index] = plane->ptr + comp->plane_offset +
+					   plane->row_stride * (y / comp->vertical_subsample_rate);
 		}
-		for (uint32_t y = s * striph; y < (s + 1) * striph; y++) {
-			uint8_t *rows[MAX_COMPONENTS] = { 0 };
+		data->y = y;
+		for (uint32_t x = 0; x < data->w; x++) {
+			data->x = x;
+			compute_color_fn(data);
 			for (size_t comp_index = 0; comp_index < format->component_count;
 			     comp_index++) {
 				const struct draw_format_component *comp =
 				    &format->components[comp_index];
-				struct draw_plane *plane = &planes[comp->plane_index];
-				rows[comp_index] =
-				    plane->ptr + comp->plane_offset +
-				    plane->row_stride * (y / comp->vertical_subsample_rate);
-			}
-			for (uint32_t x = 0; x < width; x++) {
-				const float i = (float)x / (float)width * 256.0f;
-				for (size_t comp_index = 0; comp_index < format->component_count;
-				     comp_index++) {
-					const struct draw_format_component *comp =
-					    &format->components[comp_index];
-					if ((y % comp->vertical_subsample_rate) == 0 &&
-					    (x % comp->horizontal_subsample_rate) == 0)
-						*(rows[comp_index] + x * comp->pixel_skip) =
-						    convert_color(comp, r * i, g * i, b * i);
-				}
+				if ((y % comp->vertical_subsample_rate) == 0 &&
+				    (x % comp->horizontal_subsample_rate) == 0)
+					*(rows[comp_index] + x * comp->pixel_skip) =
+					    convert_color(comp, data->out_color[2],
+							  data->out_color[1], data->out_color[0]);
 			}
 		}
 	}
 
 	unmmap_planes(mapper, bo, num_planes, planes);
 	return true;
+}
+
+static void compute_stripe(struct draw_data *data)
+{
+	const uint32_t striph = data->h / 4;
+	const uint32_t s = data->y / striph;
+	uint8_t r = 0, g = 0, b = 0;
+	switch (s) {
+		case 0:
+			r = g = b = 1;
+			break;
+		case 1:
+			r = 1;
+			break;
+		case 2:
+			g = 1;
+			break;
+		case 3:
+			b = 1;
+			break;
+		default:
+			r = g = b = 0;
+			break;
+	}
+
+	const float i = (float)data->x / (float)data->w * 256.0f;
+	data->out_color[0] = b * i;
+	data->out_color[1] = g * i;
+	data->out_color[2] = r * i;
+	data->out_color[3] = 0;
+}
+
+static void compute_ellipse(struct draw_data *data)
+{
+	data->out_color[0] = data->out_color[2] = data->out_color[3] = 0;
+	data->out_color[1] = (int)(data->progress * 255);
+	float xratio = ((int)data->x - (int)data->w / 2) / ((float)(data->w / 2));
+	float yratio = ((int)data->y - (int)data->h / 2) / ((float)(data->h / 2));
+
+	// If a point is on or inside an ellipse, num <= 1.
+	float num = xratio * xratio + yratio * yratio;
+	uint32_t r = 255 * num;
+
+	if (r < 256) {
+		data->out_color[1] = data->out_color[2] = data->out_color[3] = 0;
+		data->out_color[0] = r;
+	}
+}
+
+bool bs_draw_stripe(struct bs_mapper *mapper, struct gbm_bo *bo,
+		    const struct bs_draw_format *format)
+{
+	struct draw_data data = { 0 };
+	return draw_color(mapper, bo, format, &data, compute_stripe);
+}
+
+bool bs_draw_ellipse(struct bs_mapper *mapper, struct gbm_bo *bo,
+		     const struct bs_draw_format *format, float progress)
+{
+	struct draw_data data = { 0 };
+	data.progress = progress;
+	return draw_color(mapper, bo, format, &data, compute_ellipse);
 }
 
 const struct bs_draw_format *bs_get_draw_format(uint32_t pixel_format)
@@ -220,4 +273,24 @@ const char *bs_get_format_name(const struct bs_draw_format *format)
 {
 	assert(format);
 	return format->name;
+}
+
+bool bs_parse_draw_format(const char *str, const struct bs_draw_format **format)
+{
+	if (strlen(str) == 4) {
+		const struct bs_draw_format *bs_draw_format = bs_get_draw_format(*(uint32_t *)str);
+		if (bs_draw_format) {
+			*format = bs_draw_format;
+			return true;
+		}
+	} else {
+		const struct bs_draw_format *bs_draw_format = bs_get_draw_format_from_name(str);
+		if (bs_draw_format) {
+			*format = bs_draw_format;
+			return true;
+		}
+	}
+
+	bs_debug_error("format %s is not recognized\n", str);
+	return false;
 }

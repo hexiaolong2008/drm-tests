@@ -230,26 +230,6 @@ static bool update_test_plane(int step, int32_t max_x, int32_t max_y, struct tes
 	return needs_set;
 }
 
-static bool parse_format(const char *str, const struct bs_draw_format **format)
-{
-	if (strlen(str) == 4) {
-		const struct bs_draw_format *bs_draw_format = bs_get_draw_format(*(uint32_t *)str);
-		if (bs_draw_format) {
-			*format = bs_draw_format;
-			return true;
-		}
-	} else {
-		const struct bs_draw_format *bs_draw_format = bs_get_draw_format_from_name(str);
-		if (bs_draw_format) {
-			*format = bs_draw_format;
-			return true;
-		}
-	}
-
-	printf("plane format %s is not recognized\n", str);
-	return false;
-}
-
 static bool parse_size(const char *str, uint32_t *w, uint32_t *h)
 {
 	if (sscanf(str, "%ux%u", w, h) == 2)
@@ -355,7 +335,7 @@ int main(int argc, char **argv)
 				}
 				break;
 			case 'f':
-				if (!parse_format(optarg, &current_plane->format))
+				if (!bs_parse_draw_format(optarg, &current_plane->format))
 					return 1;
 				break;
 			case 'z':
@@ -515,7 +495,7 @@ int main(int argc, char **argv)
 			return 1;
 		}
 
-		if (!bs_draw_pattern(mapper, tp->bo, tp->format)) {
+		if (!bs_draw_stripe(mapper, tp->bo, tp->format)) {
 			bs_debug_error("failed to draw pattern to buffer object");
 			return 1;
 		}

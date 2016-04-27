@@ -21,6 +21,9 @@ struct bs_egl {
 	PFNEGLDESTROYIMAGEKHRPROC DestroyImageKHR;
 	PFNEGLIMAGEFLUSHEXTERNALEXTPROC ImageFlushExternal;
 	PFNGLEGLIMAGETARGETTEXTURE2DOESPROC EGLImageTargetTexture2DOES;
+	PFNEGLCREATESYNCKHRPROC CreateSyncKHR;
+	PFNEGLCLIENTWAITSYNCKHRPROC ClientWaitSyncKHR;
+	PFNEGLDESTROYSYNCKHRPROC DestroySyncKHR;
 };
 
 struct bs_egl_fb {
@@ -73,6 +76,11 @@ bool bs_egl_setup(struct bs_egl *self)
 		return false;
 	}
 
+	self->CreateSyncKHR = (PFNEGLCREATESYNCKHRPROC)eglGetProcAddress("eglCreateSyncKHR");
+	self->ClientWaitSyncKHR =
+	    (PFNEGLCLIENTWAITSYNCKHRPROC)eglGetProcAddress("eglClientWaitSyncKHR");
+	self->DestroySyncKHR = (PFNEGLDESTROYSYNCKHRPROC)eglGetProcAddress("eglDestroySyncKHR");
+
 	self->display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
 	if (self->display == EGL_NO_DISPLAY) {
 		bs_debug_error("failed to get egl display");
@@ -124,6 +132,14 @@ bool bs_egl_setup(struct bs_egl *self)
 		bs_debug_error("EGL_EXT_image_dma_buf_import extension not supported");
 		goto destroy_context;
 	}
+
+	if (!bs_egl_has_extension("EGL_EXT_KHR_fence_sync", egl_extensions) &&
+	    !bs_egl_has_extension("EGL_KHR_reusable_sync", egl_extensions)) {
+		bs_debug_error(
+		    "EGL_EXT_KHR_fence_sync and EGL_KHR_reusable_sync extension not supported");
+		goto destroy_context;
+	}
+
 	if (bs_egl_has_extension("EGL_EXT_image_flush_external", egl_extensions)) {
 		if (!self->ImageFlushExternal) {
 			bs_debug_print("WARNING", __func__, __FILE__, __LINE__,
@@ -302,6 +318,21 @@ bool bs_egl_target_texture2D(struct bs_egl *self, EGLImageKHR image)
 	self->EGLImageTargetTexture2DOES(GL_TEXTURE_2D, (GLeglImageOES)image);
 	GLint error = glGetError();
 	return (error == GL_NO_ERROR);
+}
+
+EGLSyncKHR bs_egl_create_sync(struct bs_egl *self, EGLenum type, const EGLint *attrib_list)
+{
+	return self->CreateSyncKHR(self->display, type, attrib_list);
+}
+
+EGLint bs_egl_wait_sync(struct bs_egl *self, EGLSyncKHR sync, EGLint flags, EGLTimeKHR timeout)
+{
+	return self->ClientWaitSyncKHR(self->display, sync, flags, timeout);
+}
+
+EGLBoolean bs_egl_destroy_sync(struct bs_egl *self, EGLSyncKHR sync)
+{
+	return self->DestroySyncKHR(self->display, sync);
 }
 
 bool bs_egl_has_extension(const char *extension, const char *extensions)

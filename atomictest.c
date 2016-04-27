@@ -716,7 +716,7 @@ static int test_multiple_planes(struct atomictest_context *ctx, struct atomictes
 					    bs_get_draw_format(yuv_formats[k]);
 					CHECK(draw_format);
 					CHECK(
-					    bs_draw_pattern(ctx->mapper, overlay->bo, draw_format));
+					    bs_draw_stripe(ctx->mapper, overlay->bo, draw_format));
 				}
 			}
 
@@ -782,7 +782,7 @@ static int test_video_overlay(struct atomictest_context *ctx, struct atomictest_
 			const struct bs_draw_format *draw_format =
 			    bs_get_draw_format(yuv_formats[j]);
 			CHECK(draw_format);
-			CHECK(bs_draw_pattern(ctx->mapper, overlay->bo, draw_format));
+			CHECK(bs_draw_stripe(ctx->mapper, overlay->bo, draw_format));
 			while (!move_plane(ctx, crtc, overlay, 20, 20)) {
 				CHECK_RESULT(commit(ctx));
 				usleep(1e6 / 60);
@@ -806,7 +806,7 @@ static int test_fullscreen_video(struct atomictest_context *ctx, struct atomicte
 			    bs_get_draw_format(yuv_formats[j]);
 			CHECK(draw_format);
 
-			CHECK(bs_draw_pattern(ctx->mapper, primary->bo, draw_format));
+			CHECK(bs_draw_stripe(ctx->mapper, primary->bo, draw_format));
 			CHECK_RESULT(commit(ctx));
 			usleep(1e6);
 		}

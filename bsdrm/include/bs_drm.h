@@ -156,6 +156,10 @@ EGLImageKHR bs_egl_image_create_gbm(struct bs_egl *self, struct gbm_bo *bo);
 void bs_egl_image_destroy(struct bs_egl *self, EGLImageKHR *image);
 bool bs_egl_image_flush_external(struct bs_egl *self, EGLImageKHR image);
 
+EGLSyncKHR bs_egl_create_sync(struct bs_egl *self, EGLenum type, const EGLint *attrib_list);
+EGLint bs_egl_wait_sync(struct bs_egl *self, EGLSyncKHR sync, EGLint flags, EGLTimeKHR timeout);
+EGLBoolean bs_egl_destroy_sync(struct bs_egl *self, EGLSyncKHR sync);
+
 struct bs_egl_fb *bs_egl_fb_new(struct bs_egl *self, EGLImageKHR image);
 bool bs_egl_target_texture2D(struct bs_egl *self, EGLImageKHR image);
 bool bs_egl_has_extension(const char *extension, const char *extensions);
@@ -202,11 +206,14 @@ void bs_mapper_unmap(struct bs_mapper *mapper, struct gbm_bo *bo, void *map_data
 
 struct bs_draw_format;
 
-bool bs_draw_pattern(struct bs_mapper *mapper, struct gbm_bo *bo,
-		     const struct bs_draw_format *format);
+bool bs_draw_stripe(struct bs_mapper *mapper, struct gbm_bo *bo,
+		    const struct bs_draw_format *format);
+bool bs_draw_ellipse(struct bs_mapper *mapper, struct gbm_bo *bo,
+		     const struct bs_draw_format *format, float progress);
 const struct bs_draw_format *bs_get_draw_format(uint32_t pixel_format);
 const struct bs_draw_format *bs_get_draw_format_from_name(const char *str);
 uint32_t bs_get_pixel_format(const struct bs_draw_format *format);
 const char *bs_get_format_name(const struct bs_draw_format *format);
+bool bs_parse_draw_format(const char *str, const struct bs_draw_format **format);
 
 #endif

@@ -20,12 +20,12 @@ all: \
 	CC_BINARY(drm_cursor_test) \
 	CC_BINARY(gamma_test) \
 	CC_BINARY(linear_bo_test) \
+	CC_BINARY(mapped_texture_test) \
 	CC_BINARY(mmap_test) \
 	CC_BINARY(null_platform_test) \
 	CC_BINARY(plane_test) \
 	CC_BINARY(stripe) \
 	CC_BINARY(swrast_test) \
-	CC_BINARY(tiled_bo_test) \
 	CC_BINARY(vgem_test)
 
 ifeq ($(USE_VULKAN),1)
@@ -56,8 +56,8 @@ CC_BINARY(gamma_test): LDLIBS += -lm $(DRM_LIBS)
 CC_BINARY(plane_test): plane_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 CC_BINARY(plane_test): LDLIBS += -lm $(DRM_LIBS)
 
-CC_BINARY(tiled_bo_test): tiled_bo_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
-CC_BINARY(tiled_bo_test): LDLIBS += -lGLESv2
+CC_BINARY(mapped_texture_test): mapped_texture_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
+CC_BINARY(mapped_texture_test): LDLIBS += -lGLESv2
 
 ifeq ($(USE_VULKAN),1)
 CC_BINARY(vk_glow): vk_glow.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
