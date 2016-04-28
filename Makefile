@@ -15,7 +15,7 @@ DRM_LIBS = -lGLESv2
 CFLAGS += $(PC_CFLAGS)
 LDLIBS += $(PC_LIBS)
 
-all: CC_BINARY(atomictest) CC_BINARY(drm_cursor_test) CC_BINARY(gamma_test) CC_BINARY(linear_bo_test) CC_BINARY(null_platform_test) CC_BINARY(nv12_test) CC_BINARY(stripe) CC_BINARY(swrast_test) CC_BINARY(vgem_fb_test) CC_BINARY(vgem_test)
+all: CC_BINARY(atomictest) CC_BINARY(drm_cursor_test) CC_BINARY(gamma_test) CC_BINARY(linear_bo_test) CC_BINARY(null_platform_test) CC_BINARY(plane_test) CC_BINARY(stripe) CC_BINARY(swrast_test) CC_BINARY(vgem_fb_test) CC_BINARY(vgem_test)
 
 CC_BINARY(drm_cursor_test): drm_cursor_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 
@@ -38,5 +38,5 @@ CC_BINARY(atomictest): LDLIBS += $(DRM_LIBS)
 CC_BINARY(gamma_test): gamma_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 CC_BINARY(gamma_test): LDLIBS += -lm $(DRM_LIBS)
 
-CC_BINARY(nv12_test): nv12_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
-CC_BINARY(nv12_test): LDLIBS += -lm $(DRM_LIBS)
+CC_BINARY(plane_test): plane_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
+CC_BINARY(plane_test): LDLIBS += -lm $(DRM_LIBS)
