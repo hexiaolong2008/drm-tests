@@ -131,7 +131,9 @@ void *bs_dumb_mmap(int fd, uint32_t handle, size_t size);
 
 // dma_buf.c
 void *bs_dma_buf_mmap(struct gbm_bo *bo);
+void *bs_dma_buf_mmap_plane(struct gbm_bo *bo, size_t plane);
 int bs_dma_buf_unmmap(struct gbm_bo *bo, void *addr);
+int bs_dma_buf_unmmap_plane(struct gbm_bo *bo, size_t plane, void *addr);
 
 // egl.c
 struct bs_egl;
