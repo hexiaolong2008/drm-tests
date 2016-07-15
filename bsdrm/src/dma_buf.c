@@ -16,8 +16,15 @@ void *bs_dma_buf_mmap_plane(struct gbm_bo *bo, size_t plane)
 	assert(bo);
 
 	int drm_prime_fd = gbm_bo_get_plane_fd(bo, plane);
+	uint32_t handle = gbm_bo_get_plane_handle(bo, plane).u32;
+	size_t length = 0;
 
-	void *addr = mmap(NULL, gbm_bo_get_plane_size(bo, plane), (PROT_READ | PROT_WRITE),
+	for (size_t p = 0; p <= plane; p++) {
+		if (gbm_bo_get_plane_handle(bo, p).u32 == handle)
+			length += gbm_bo_get_plane_size(bo, p);
+	}
+
+	void *addr = mmap(NULL, length, (PROT_READ | PROT_WRITE),
 			  MAP_SHARED, drm_prime_fd, 0);
 	if (addr == MAP_FAILED) {
 		bs_debug_error("mmap returned MAP_FAILED: %d", errno);
