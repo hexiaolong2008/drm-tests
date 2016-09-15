@@ -67,8 +67,7 @@ int main(int argc, char **argv)
 			bs_debug_error("failed to open card %s", argv[1]);
 			return 1;
 		}
-	}
-	else {
+	} else {
 		fd = bs_drm_open_main_display();
 		if (fd < 0) {
 			bs_debug_error("failed to open card for display");
@@ -188,20 +187,14 @@ int main(int argc, char **argv)
 
 			fd_set fds;
 			FD_ZERO(&fds);
-			FD_SET(0, &fds);
 			FD_SET(fd, &fds);
 
 			ret = select(fd + 1, &fds, NULL, NULL, NULL);
 			if (ret < 0) {
 				bs_debug_error("select err: %s", strerror(errno));
 				return 1;
-			}
-			else if (ret == 0) {
+			} else if (ret == 0) {
 				bs_debug_error("select timeout");
-				return 1;
-			}
-			else if (FD_ISSET(0, &fds)) {
-				bs_debug_error("user interrupted");
 				return 1;
 			}
 			ret = drmHandleEvent(fd, &evctx);
