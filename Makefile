@@ -27,6 +27,10 @@ all: \
 	CC_BINARY(vgem_fb_test) \
 	CC_BINARY(vgem_test)
 
+ifeq ($(USE_VULKAN),1)
+all: CC_BINARY(vk_glow)
+endif
+
 CC_BINARY(drm_cursor_test): drm_cursor_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 
 CC_BINARY(null_platform_test): null_platform_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
@@ -50,3 +54,8 @@ CC_BINARY(gamma_test): LDLIBS += -lm $(DRM_LIBS)
 
 CC_BINARY(plane_test): plane_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 CC_BINARY(plane_test): LDLIBS += -lm $(DRM_LIBS)
+
+ifeq ($(USE_VULKAN),1)
+CC_BINARY(vk_glow): vk_glow.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
+CC_BINARY(vk_glow): LDLIBS += -lm -lvulkan $(DRM_LIBS)
+endif
