@@ -345,7 +345,8 @@ int main(int argc, char **argv)
 
 		printf("Creating buffer %ux%u\n", mode->hdisplay, mode->vdisplay);
 		struct gbm_bo *bo =
-		    gbm_bo_create(gbm, mode->hdisplay, mode->vdisplay, GBM_FORMAT_XRGB8888, 0);
+		    gbm_bo_create(gbm, mode->hdisplay, mode->vdisplay, GBM_FORMAT_XRGB8888,
+				  GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR);
 		if (!bo) {
 			bs_debug_error("failed to create buffer object");
 			return 1;
