@@ -37,6 +37,7 @@ Code Philosophy
 - Badly behaving applications should fail fast
 - Asserts fail fast
 - Use asserts to make bad applications fail fast
+- Make code style consistent with clang-format
 
 Naming Rules
 ---
@@ -67,6 +68,16 @@ ${CC} ${LDFLAGS} \
     dumb_mmap.o \
     stripe.o -o bstest || exit 1
 ```
+
+Clang Format Example
+---
+If you want to format `gamma_test.c`, first go to the drm-tests source directory and then run:
+
+```
+clang-format -style=file -i gamma_test.c
+```
+
+The `-style=file` argument will cause clang-format to search recursively upwards for the `.clang-format` style file, which is in drm-tests.
 
 Upcoming Features
 ---
