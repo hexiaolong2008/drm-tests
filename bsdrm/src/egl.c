@@ -15,6 +15,7 @@ struct bs_egl {
 	EGLDisplay display;
 	EGLContext ctx;
 	bool use_image_flush_external;
+	bool use_dma_buf_import_modifiers;
 
 	// Names are the original gl/egl function names with the prefix chopped off.
 	PFNEGLCREATEIMAGEKHRPROC CreateImageKHR;
@@ -85,10 +86,7 @@ bool bs_egl_setup(struct bs_egl *self)
 
 	// Get any EGLConfig. We need one to create a context, but it isn't used to create any
 	// surfaces.
-	const EGLint config_attribs[] = {
-		EGL_SURFACE_TYPE, EGL_DONT_CARE,
-		EGL_NONE
-	};
+	const EGLint config_attribs[] = { EGL_SURFACE_TYPE, EGL_DONT_CARE, EGL_NONE };
 	EGLConfig egl_config;
 	EGLint num_configs;
 	if (!eglChooseConfig(self->display, config_attribs, &egl_config, 1,
@@ -129,12 +127,14 @@ bool bs_egl_setup(struct bs_egl *self)
 	if (has_extension("EGL_EXT_image_flush_external", egl_extensions)) {
 		if (!self->ImageFlushExternal) {
 			bs_debug_print("WARNING", __func__, __FILE__, __LINE__,
-			    "EGL_EXT_image_flush_external extension is supported, but "\
-			    "eglGetProcAddress returned NULL.");
+				       "EGL_EXT_image_flush_external extension is supported, but "
+				       "eglGetProcAddress returned NULL.");
 		} else {
 			self->use_image_flush_external = true;
 		}
 	}
+	if (has_extension("EGL_EXT_image_dma_buf_import_modifiers", egl_extensions))
+		self->use_dma_buf_import_modifiers = true;
 
 	const char *gl_extensions = (const char *)glGetString(GL_EXTENSIONS);
 	if (!has_extension("GL_OES_EGL_image", gl_extensions)) {
@@ -163,25 +163,36 @@ bool bs_egl_make_current(struct bs_egl *self)
 			      EGL_NO_SURFACE /* No default draw read */, self->ctx);
 }
 
-EGLImageKHR bs_egl_image_create(struct bs_egl *self, int prime_fd, int width, int height,
-				uint32_t format, int pitch, int offset)
+static EGLImageKHR _bs_egl_image_create(struct bs_egl *self, int prime_fd, int width, int height,
+					uint32_t format, int pitch, int offset,
+					uint64_t *format_modifier)
 {
 	assert(self);
 	assert(self->CreateImageKHR);
 	assert(self->display != EGL_NO_DISPLAY);
-	const EGLint khr_image_attrs[] = { EGL_DMA_BUF_PLANE0_FD_EXT,
-					   prime_fd,
-					   EGL_WIDTH,
-					   width,
-					   EGL_HEIGHT,
-					   height,
-					   EGL_LINUX_DRM_FOURCC_EXT,
-					   (int)format,
-					   EGL_DMA_BUF_PLANE0_PITCH_EXT,
-					   pitch,
-					   EGL_DMA_BUF_PLANE0_OFFSET_EXT,
-					   offset,
-					   EGL_NONE };
+	EGLint khr_image_attrs[17] = { EGL_DMA_BUF_PLANE0_FD_EXT,
+				       prime_fd,
+				       EGL_WIDTH,
+				       width,
+				       EGL_HEIGHT,
+				       height,
+				       EGL_LINUX_DRM_FOURCC_EXT,
+				       (int)format,
+				       EGL_DMA_BUF_PLANE0_PITCH_EXT,
+				       pitch,
+				       EGL_DMA_BUF_PLANE0_OFFSET_EXT,
+				       offset,
+				       EGL_NONE };
+
+	if (self->use_dma_buf_import_modifiers) {
+		assert(format_modifier);
+		uint64_t modifier = format_modifier ? *format_modifier : 0;
+		khr_image_attrs[12] = EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT;
+		khr_image_attrs[13] = modifier & 0xfffffffful;
+		khr_image_attrs[14] = EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT;
+		khr_image_attrs[15] = modifier >> 32;
+		khr_image_attrs[16] = EGL_NONE;
+	}
 
 	EGLImageKHR image =
 	    self->CreateImageKHR(self->display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT,
@@ -195,6 +206,20 @@ EGLImageKHR bs_egl_image_create(struct bs_egl *self, int prime_fd, int width, in
 	return image;
 }
 
+EGLImageKHR bs_egl_image_create(struct bs_egl *self, int prime_fd, int width, int height,
+				uint32_t format, int pitch, int offset)
+{
+	return _bs_egl_image_create(self, prime_fd, width, height, format, pitch, offset, NULL);
+}
+
+EGLImageKHR bs_egl_image_create_with_modifier(struct bs_egl *self, int prime_fd, int width,
+					      int height, uint32_t format, int pitch, int offset,
+					      uint64_t format_modifier)
+{
+	return _bs_egl_image_create(self, prime_fd, width, height, format, pitch, offset,
+				    &format_modifier);
+}
+
 EGLImageKHR bs_egl_image_create_gbm(struct bs_egl *self, struct gbm_bo *bo)
 {
 	assert(bo);
@@ -203,8 +228,10 @@ EGLImageKHR bs_egl_image_create_gbm(struct bs_egl *self, struct gbm_bo *bo)
 		bs_debug_error("failed to get fb for bo: %d", fd);
 		return EGL_NO_IMAGE_KHR;
 	}
-	return bs_egl_image_create(self, fd, gbm_bo_get_width(bo), gbm_bo_get_height(bo),
-				   gbm_bo_get_format(bo), gbm_bo_get_stride_or_tiling(bo), 0 /* no offset */);
+	uint64_t modifier = self->use_dma_buf_import_modifiers ? gbm_bo_get_format_modifier(bo) : 0;
+	return bs_egl_image_create_with_modifier(
+	    self, fd, gbm_bo_get_width(bo), gbm_bo_get_height(bo), gbm_bo_get_format(bo),
+	    gbm_bo_get_stride(bo), 0 /* no offset */, modifier);
 }
 
 void bs_egl_image_destroy(struct bs_egl *self, EGLImageKHR *image)
