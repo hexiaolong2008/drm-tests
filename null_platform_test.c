@@ -6,6 +6,8 @@
 
 #include "bs_drm.h"
 
+#include <getopt.h>
+
 static GLuint solid_shader_create()
 {
 	const GLchar *vert =
@@ -58,13 +60,49 @@ static void page_flip_handler(int fd, unsigned int frame, unsigned int sec, unsi
 	*waiting_for_flip = 0;
 }
 
+static const struct option longopts[] = {
+	{ "test-page-flip-format-change", no_argument, NULL, 'f' },
+	{ "help", no_argument, NULL, 'h' },
+	{ 0, 0, 0, 0 },
+};
+
+static void print_help(const char *argv0)
+{
+	// clang-format off
+	printf("usage: %s [OPTIONS] [drm_device_path]\n", argv0);
+	printf("  -f, --test-page-flip-format-change		    test page flips alternating RGB and BGR fbs\n");
+	printf("  -h, --help		    show help\n");
+	printf("\n");
+	printf("\n");
+	// clang-format on
+}
+
 int main(int argc, char **argv)
 {
 	int fd = -1;
-	if (argc >= 2) {
-		fd = open(argv[1], O_RDWR);
+	bool test_page_flip_format_change = false;
+	bool help_flag = false;
+
+	int c = -1;
+	while ((c = getopt_long(argc, argv, "fh", longopts, NULL)) != -1) {
+		switch (c) {
+			case 'f':
+				test_page_flip_format_change = true;
+				break;
+			case 'h':
+				help_flag = true;
+				break;
+		}
+	}
+
+	if (help_flag) {
+		print_help(*argv);
+	}
+
+	if (optind < argc) {
+		fd = open(argv[optind], O_RDWR);
 		if (fd < 0) {
-			bs_debug_error("failed to open card %s", argv[1]);
+			bs_debug_error("failed to open card %s", argv[optind]);
 			return 1;
 		}
 	} else {
@@ -101,8 +139,13 @@ int main(int argc, char **argv)
 	uint32_t ids[2];
 	struct bs_egl_fb *egl_fbs[2];
 	for (size_t fb_index = 0; fb_index < 2; fb_index++) {
+		uint32_t format = GBM_FORMAT_XRGB8888;
+		if (test_page_flip_format_change && fb_index) {
+		  format = GBM_FORMAT_XBGR8888;
+		}
+
 		bos[fb_index] =
-		    gbm_bo_create(gbm, mode->hdisplay, mode->vdisplay, GBM_FORMAT_XRGB8888,
+		    gbm_bo_create(gbm, mode->hdisplay, mode->vdisplay, format,
 				  GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
 		if (bos[fb_index] == NULL) {
 			bs_debug_error("failed to allocate framebuffer");
