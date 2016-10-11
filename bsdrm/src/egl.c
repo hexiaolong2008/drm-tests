@@ -252,6 +252,15 @@ GLuint bs_egl_fb_name(struct bs_egl_fb *self)
 	return self->fb;
 }
 
+bool bs_egl_target_texture2D(struct bs_egl *self, EGLImageKHR image)
+{
+	assert(self);
+	assert(self->EGLImageTargetTexture2DOES);
+	self->EGLImageTargetTexture2DOES(GL_TEXTURE_2D, (GLeglImageOES)image);
+	GLint error = glGetError();
+	return (error == GL_NO_ERROR);
+}
+
 static bool has_extension(const char *extension, const char *extensions)
 {
 	const char *start, *where, *terminator;
