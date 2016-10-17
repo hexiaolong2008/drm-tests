@@ -150,6 +150,7 @@ EGLImageKHR bs_egl_image_create(struct bs_egl *self, int prime_fd, int width, in
 				uint32_t format, int pitch, int offset);
 EGLImageKHR bs_egl_image_create_gbm(struct bs_egl *self, struct gbm_bo *bo);
 void bs_egl_image_destroy(struct bs_egl *self, EGLImageKHR *image);
+bool bs_egl_image_flush_external(struct bs_egl *self, EGLImageKHR image);
 
 struct bs_egl_fb *bs_egl_fb_new(struct bs_egl *self, EGLImageKHR image);
 bool bs_egl_target_texture2D(struct bs_egl *self, EGLImageKHR image);

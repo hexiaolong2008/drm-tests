@@ -14,10 +14,12 @@ struct bs_egl {
 	bool setup;
 	EGLDisplay display;
 	EGLContext ctx;
+	bool use_image_flush_external;
 
 	// Names are the original gl/egl function names with the prefix chopped off.
 	PFNEGLCREATEIMAGEKHRPROC CreateImageKHR;
 	PFNEGLDESTROYIMAGEKHRPROC DestroyImageKHR;
+	PFNEGLIMAGEFLUSHEXTERNALEXTPROC ImageFlushExternal;
 	PFNGLEGLIMAGETARGETTEXTURE2DOESPROC EGLImageTargetTexture2DOES;
 };
 
@@ -60,6 +62,8 @@ bool bs_egl_setup(struct bs_egl *self)
 
 	self->CreateImageKHR = (PFNEGLCREATEIMAGEKHRPROC)eglGetProcAddress("eglCreateImageKHR");
 	self->DestroyImageKHR = (PFNEGLDESTROYIMAGEKHRPROC)eglGetProcAddress("eglDestroyImageKHR");
+	self->ImageFlushExternal =
+	    (PFNEGLIMAGEFLUSHEXTERNALEXTPROC)eglGetProcAddress("eglImageFlushExternalEXT");
 	self->EGLImageTargetTexture2DOES =
 	    (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
 	if (!self->CreateImageKHR || !self->DestroyImageKHR || !self->EGLImageTargetTexture2DOES) {
@@ -121,6 +125,15 @@ bool bs_egl_setup(struct bs_egl *self)
 	if (!has_extension("EGL_EXT_image_dma_buf_import", egl_extensions)) {
 		bs_debug_error("EGL_EXT_image_dma_buf_import extension not supported");
 		goto destroy_context;
+	}
+	if (has_extension("EGL_EXT_image_flush_external", egl_extensions)) {
+		if (!self->ImageFlushExternal) {
+			bs_debug_print("WARNING", __func__, __FILE__, __LINE__,
+			    "EGL_EXT_image_flush_external extension is supported, but "\
+			    "eglGetProcAddress returned NULL.");
+		} else {
+			self->use_image_flush_external = true;
+		}
 	}
 
 	const char *gl_extensions = (const char *)glGetString(GL_EXTENSIONS);
@@ -202,6 +215,16 @@ void bs_egl_image_destroy(struct bs_egl *self, EGLImageKHR *image)
 	assert(self->DestroyImageKHR);
 	self->DestroyImageKHR(self->display, *image);
 	*image = EGL_NO_IMAGE_KHR;
+}
+
+bool bs_egl_image_flush_external(struct bs_egl *self, EGLImageKHR image)
+{
+	assert(self);
+	assert(image != EGL_NO_IMAGE_KHR);
+	if (!self->use_image_flush_external)
+		return true;
+	const EGLAttrib attrs[] = { EGL_NONE };
+	return self->ImageFlushExternal(self->display, image, attrs);
 }
 
 struct bs_egl_fb *bs_egl_fb_new(struct bs_egl *self, EGLImageKHR image)

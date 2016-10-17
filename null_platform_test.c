@@ -138,6 +138,7 @@ int main(int argc, char **argv)
 	struct gbm_bo *bos[2];
 	uint32_t ids[2];
 	struct bs_egl_fb *egl_fbs[2];
+	EGLImageKHR egl_images[2];
 	for (size_t fb_index = 0; fb_index < 2; fb_index++) {
 		uint32_t format = GBM_FORMAT_XRGB8888;
 		if (test_page_flip_format_change && fb_index) {
@@ -169,6 +170,7 @@ int main(int argc, char **argv)
 			bs_debug_error("failed to create framebuffer from EGLImageKHR");
 			return 1;
 		}
+		egl_images[fb_index] = egl_image;
 	}
 
 	int ret = drmModeSetCrtc(fd, pipe.crtc_id, ids[0], 0 /* x */, 0 /* y */, &pipe.connector_id,
@@ -215,6 +217,12 @@ int main(int argc, char **argv)
 
 		usleep(1e6 / 120); /* 120 Hz */
 		glFinish();
+
+		if (!bs_egl_image_flush_external(egl, egl_images[fb_idx])) {
+			bs_debug_error("failed to call image_flush_external");
+			return 1;
+		}
+
 		ret = drmModePageFlip(fd, pipe.crtc_id, ids[fb_idx], DRM_MODE_PAGE_FLIP_EVENT,
 				      &waiting_for_flip);
 		if (ret) {
