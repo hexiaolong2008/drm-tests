@@ -197,7 +197,7 @@ void draw(struct context * ctx)
 
 		unsigned char pixels[4];
 		glReadPixels(0, 0, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-		fprintf(stderr, "color = %hhu %hhu %hhu %hhu\n",
+		printf("color = %hhu %hhu %hhu %hhu\n",
 			pixels[0], pixels[1], pixels[2], pixels[3]);
 	}
 
@@ -243,12 +243,12 @@ int main(int argc, char ** argv)
 		goto terminate_display;
 	}
 
-	fprintf(stderr, "EGL %d.%d\n", egl_major, egl_minor);
-	fprintf(stderr, "EGL %s\n",
+	printf("EGL %d.%d\n", egl_major, egl_minor);
+	printf("EGL %s\n",
 		eglQueryString(ctx.egl_display, EGL_VERSION));
 
 	extensions = eglQueryString(ctx.egl_display, EGL_EXTENSIONS);
-	fprintf(stderr, "EGL Extensions: %s\n", extensions);
+	printf("EGL Extensions: %s\n", extensions);
 
 	if (!eglChooseConfig(ctx.egl_display, config_attribs, NULL, 0,
 				&num_configs)) {
@@ -291,7 +291,7 @@ int main(int argc, char ** argv)
 		goto destroy_context;
 	}
 
-	fprintf(stderr, "GL extensions: %s\n", glGetString(GL_EXTENSIONS));
+	printf("GL extensions: %s\n", glGetString(GL_EXTENSIONS));
 
 	glGenFramebuffers(1, &ctx.gl_fb);
 	glBindFramebuffer(GL_FRAMEBUFFER, ctx.gl_fb);
