@@ -46,7 +46,7 @@ CC_BINARY(linear_bo_test): LDLIBS += -lGLESv2
 CC_BINARY(swrast_test): swrast_test.o
 CC_BINARY(swrast_test): LDLIBS += -lGLESv2
 
-CC_BINARY(atomictest): atomictest.o bo.o dev.o modeset.o
+CC_BINARY(atomictest): atomictest.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 CC_BINARY(atomictest): CFLAGS += -DUSE_ATOMIC_API
 CC_BINARY(atomictest): LDLIBS += $(DRM_LIBS)
 
