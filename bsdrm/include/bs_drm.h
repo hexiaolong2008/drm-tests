@@ -187,4 +187,14 @@ uint32_t bs_app_fb_id(struct bs_app *self, size_t index);
 bool bs_app_setup(struct bs_app *self);
 int bs_app_display_fb(struct bs_app *self, size_t index);
 
+// draw.c
+
+struct bs_draw_format;
+
+bool bs_draw_pattern(struct gbm_bo *bo, const struct bs_draw_format *format);
+const struct bs_draw_format *bs_get_draw_format(uint32_t pixel_format);
+const struct bs_draw_format *bs_get_draw_format_from_name(const char *str);
+uint32_t bs_get_pixel_format(const struct bs_draw_format *format);
+const char *bs_get_format_name(const struct bs_draw_format *format);
+
 #endif
