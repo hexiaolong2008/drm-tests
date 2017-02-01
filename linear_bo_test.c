@@ -10,7 +10,8 @@ static const useconds_t test_case_display_usec = 2000000;
 
 struct test_case {
 	bool expect_success;
-	uint32_t format;
+	uint32_t format;    /* format for allocating buffer object from GBM*/
+	uint32_t fb_format; /* format used to create DRM framebuffer, 0 indicates same as format */
 	enum gbm_bo_flags usage;
 };
 
@@ -43,6 +44,8 @@ static void test_case_print(FILE *out, const struct test_case *tcase)
 		fprintf(out, "%sGBM_BO_USE_LINEAR", first ? "" : " | ");
 		first = false;
 	}
+	if (tcase->fb_format)
+		fprintf(out, " fb_format=%s", format_to_string(tcase->fb_format));
 }
 
 static void test_case_colors(const struct test_case *tcase,
@@ -267,13 +270,15 @@ static bool test_case_draw_dma_buf(const struct test_case *tcase, struct gbm_bo 
 int main(int argc, char **argv)
 {
 	const struct test_case tcases[] = {
-		{ true, GBM_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING },
-		{ true, GBM_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR },
-		{ true, GBM_FORMAT_ARGB8888, GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING },
-		{ true, GBM_FORMAT_ARGB8888, GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR },
-		{ false, GBM_FORMAT_XRGB8888,
+		{ true, GBM_FORMAT_XRGB8888, 0, GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING },
+		{ true, GBM_FORMAT_XRGB8888, 0, GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR },
+		{ true, GBM_FORMAT_ARGB8888, GBM_FORMAT_XRGB8888,
+		  GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING },
+		{ true, GBM_FORMAT_ARGB8888, GBM_FORMAT_XRGB8888,
+		  GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR },
+		{ false, GBM_FORMAT_XRGB8888, 0,
 		  GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING | GBM_BO_USE_LINEAR },
-		{ false, GBM_FORMAT_ARGB8888,
+		{ false, GBM_FORMAT_ARGB8888, 0,
 		  GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING | GBM_BO_USE_LINEAR },
 	};
 	const size_t tcase_count = sizeof(tcases) / sizeof(tcases[0]);
@@ -326,7 +331,12 @@ int main(int argc, char **argv)
 		if (!bo_success)
 			continue;
 
-		fbs[tcase_index] = bs_drm_fb_create_gbm(bo);
+		struct bs_drm_fb_builder *fb_builder = bs_drm_fb_builder_new();
+		bs_drm_fb_builder_gbm_bo(fb_builder, bo);
+		if (tcase->fb_format)
+			bs_drm_fb_builder_format(fb_builder, tcase->fb_format);
+		fbs[tcase_index] = bs_drm_fb_builder_create_fb(fb_builder);
+		bs_drm_fb_builder_destroy(&fb_builder);
 		if (!fbs[tcase_index]) {
 			bs_debug_error("failed to create framebuffer from buffer object");
 			return 1;

@@ -119,6 +119,21 @@ bool bs_drm_pipe_plumber_make(struct bs_drm_pipe_plumber *, struct bs_drm_pipe *
 bool bs_drm_pipe_make(int fd, struct bs_drm_pipe *pipe);
 
 // drm_fb.c
+struct bs_drm_fb_builder;
+
+// A builder class used to collect drm framebuffer parameters and then build it.
+struct bs_drm_fb_builder *bs_drm_fb_builder_new();
+void bs_drm_fb_builder_destroy(struct bs_drm_fb_builder **);
+// Copies all available framebuffer parameters from the given buffer object.
+void bs_drm_fb_builder_gbm_bo(struct bs_drm_fb_builder *, struct gbm_bo *bo);
+// Sets the drm format parameter of the resulting framebuffer.
+void bs_drm_fb_builder_format(struct bs_drm_fb_builder *, uint32_t format);
+// Creates the framebuffer ID from the previously set parameters and returns it or 0 if there was a
+// failure.
+uint32_t bs_drm_fb_builder_create_fb(struct bs_drm_fb_builder *);
+
+// Creates a drm framebuffer from the given buffer object and returns the framebuffer's ID on
+// success or 0 on failure.
 uint32_t bs_drm_fb_create_gbm(struct gbm_bo *bo);
 
 // drm_open.c
