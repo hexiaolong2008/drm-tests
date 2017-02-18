@@ -17,13 +17,13 @@ void bs_open_enumerate(const char *format, unsigned start, unsigned end,
 		char *file_path = NULL;
 		int ret = asprintf(&file_path, format, dev_index);
 		if (ret == -1)
-			return;
+			continue;
 		assert(file_path);
 
 		int fd = open(file_path, O_RDWR);
 		free(file_path);
 		if (fd < 0)
-			return;
+			continue;
 
 		bool end = body(user, fd);
 		close(fd);
