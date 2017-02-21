@@ -57,7 +57,7 @@ static bool connector_has_crtc(int fd, drmModeRes *res, drmModeConnector *connec
 	return false;
 }
 
-static uint32_t display_rank_connetor_type(uint32_t connector_type)
+static uint32_t display_rank_connector_type(uint32_t connector_type)
 {
 	switch (connector_type) {
 		case DRM_MODE_CONNECTOR_LVDS:
@@ -93,7 +93,7 @@ static uint32_t display_rank(int fd)
 		if (!has_connection)
 			continue;
 
-		uint32_t rank = display_rank_connetor_type(connector->connector_type);
+		uint32_t rank = display_rank_connector_type(connector->connector_type);
 		if (best_rank > rank)
 			best_rank = rank;
 	}
