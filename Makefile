@@ -43,7 +43,7 @@ CC_BINARY(vgem_fb_test): vgem_fb_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 CC_BINARY(linear_bo_test): linear_bo_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 CC_BINARY(linear_bo_test): LDLIBS += -lGLESv2
 
-CC_BINARY(swrast_test): swrast_test.o
+CC_BINARY(swrast_test): swrast_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 CC_BINARY(swrast_test): LDLIBS += -lGLESv2
 
 CC_BINARY(atomictest): atomictest.o CC_STATIC_LIBRARY(libbsdrm.pic.a)

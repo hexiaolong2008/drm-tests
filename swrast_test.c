@@ -3,18 +3,7 @@
  * found in the LICENSE file.
  */
 
-#include <errno.h>
-#include <fcntl.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <string.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
-#include <GLES2/gl2.h>
-#include <GLES2/gl2ext.h>
+#include "bs_drm.h"
 
 const char * get_gl_error()
 {
@@ -270,10 +259,18 @@ int main(int argc, char ** argv)
 		goto terminate_display;
 	}
 
-	ctx.egl_ctx = eglCreateContext(ctx.egl_display,
-		NULL /* No framebuffer */,
-		EGL_NO_CONTEXT /* No shared context */,
-		context_attribs);
+	if (bs_egl_has_extension(extensions, "EGL_KHR_no_config_context")) {
+		ctx.egl_ctx = eglCreateContext(ctx.egl_display,
+			NULL /* No Config */,
+			EGL_NO_CONTEXT /* No shared context */,
+			context_attribs);
+	} else {
+		ctx.egl_ctx = eglCreateContext(ctx.egl_display,
+			egl_config,
+			EGL_NO_CONTEXT /* No shared context */,
+			context_attribs);
+	}
+
 	if (ctx.egl_ctx == EGL_NO_CONTEXT) {
 		fprintf(stderr, "failed to create OpenGL ES Context: %s\n",
 			get_egl_error());
