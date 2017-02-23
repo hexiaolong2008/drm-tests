@@ -6,7 +6,6 @@
 
 #include "bs_drm.h"
 
-static bool has_extension(const char *extension, const char *extensions);
 static const char *get_egl_error();
 static const char *get_gl_framebuffer_error();
 
@@ -116,15 +115,15 @@ bool bs_egl_setup(struct bs_egl *self)
 	}
 
 	const char *egl_extensions = eglQueryString(self->display, EGL_EXTENSIONS);
-	if (!has_extension("EGL_KHR_image_base", egl_extensions)) {
+	if (!bs_egl_has_extension("EGL_KHR_image_base", egl_extensions)) {
 		bs_debug_error("EGL_KHR_image_base extension not supported");
 		goto destroy_context;
 	}
-	if (!has_extension("EGL_EXT_image_dma_buf_import", egl_extensions)) {
+	if (!bs_egl_has_extension("EGL_EXT_image_dma_buf_import", egl_extensions)) {
 		bs_debug_error("EGL_EXT_image_dma_buf_import extension not supported");
 		goto destroy_context;
 	}
-	if (has_extension("EGL_EXT_image_flush_external", egl_extensions)) {
+	if (bs_egl_has_extension("EGL_EXT_image_flush_external", egl_extensions)) {
 		if (!self->ImageFlushExternal) {
 			bs_debug_print("WARNING", __func__, __FILE__, __LINE__,
 				       "EGL_EXT_image_flush_external extension is supported, but "
@@ -133,11 +132,11 @@ bool bs_egl_setup(struct bs_egl *self)
 			self->use_image_flush_external = true;
 		}
 	}
-	if (has_extension("EGL_EXT_image_dma_buf_import_modifiers", egl_extensions))
+	if (bs_egl_has_extension("EGL_EXT_image_dma_buf_import_modifiers", egl_extensions))
 		self->use_dma_buf_import_modifiers = true;
 
 	const char *gl_extensions = (const char *)glGetString(GL_EXTENSIONS);
-	if (!has_extension("GL_OES_EGL_image", gl_extensions)) {
+	if (!bs_egl_has_extension("GL_OES_EGL_image", gl_extensions)) {
 		bs_debug_error("GL_OES_EGL_image extension not supported");
 		goto destroy_context;
 	}
@@ -311,7 +310,7 @@ bool bs_egl_target_texture2D(struct bs_egl *self, EGLImageKHR image)
 	return (error == GL_NO_ERROR);
 }
 
-static bool has_extension(const char *extension, const char *extensions)
+bool bs_egl_has_extension(const char *extension, const char *extensions)
 {
 	const char *start, *where, *terminator;
 	start = extensions;

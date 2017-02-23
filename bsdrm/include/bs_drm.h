@@ -172,6 +172,7 @@ bool bs_egl_image_flush_external(struct bs_egl *self, EGLImageKHR image);
 
 struct bs_egl_fb *bs_egl_fb_new(struct bs_egl *self, EGLImageKHR image);
 bool bs_egl_target_texture2D(struct bs_egl *self, EGLImageKHR image);
+bool bs_egl_has_extension(const char *extension, const char *extensions);
 void bs_egl_fb_destroy(struct bs_egl_fb **fb);
 GLuint bs_egl_fb_name(struct bs_egl_fb *self);
 
