@@ -9,7 +9,6 @@
 static const useconds_t test_case_display_usec = 2000000;
 
 struct test_case {
-	bool expect_success;
 	uint32_t format;    /* format for allocating buffer object from GBM*/
 	uint32_t fb_format; /* format used to create DRM framebuffer, 0 indicates same as format */
 	enum gbm_bo_flags usage;
@@ -29,9 +28,8 @@ const char *format_to_string(uint32_t format)
 
 static void test_case_print(FILE *out, const struct test_case *tcase)
 {
-	fprintf(out, "expect_success=%s format=%s usage=", tcase->expect_success ? "true" : "false",
-		format_to_string(tcase->format));
-	bool first;
+	fprintf(out, "format=%s usage=", format_to_string(tcase->format));
+	bool first = true;
 	if (tcase->usage & GBM_BO_USE_SCANOUT) {
 		fprintf(out, "GBM_BO_USE_SCANOUT");
 		first = false;
@@ -51,8 +49,8 @@ static void test_case_print(FILE *out, const struct test_case *tcase)
 static void test_case_colors(const struct test_case *tcase,
 			     float *colors /* sizeof(colors) / sizeof(colors[0]) == 9 */)
 {
-	colors[0] = tcase->expect_success ? 0.0f : 1.0f;
-	colors[1] = tcase->expect_success ? 1.0f : 0.0f;
+	colors[0] = 0.0f;
+	colors[1] = 1.0f;
 	colors[2] = 0.0f;
 
 	colors[3] = tcase->usage & GBM_BO_USE_SCANOUT ? 1.0f : 0.0f;
@@ -270,16 +268,12 @@ static bool test_case_draw_dma_buf(const struct test_case *tcase, struct gbm_bo 
 int main(int argc, char **argv)
 {
 	const struct test_case tcases[] = {
-		{ true, GBM_FORMAT_XRGB8888, 0, GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING },
-		{ true, GBM_FORMAT_XRGB8888, 0, GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR },
-		{ true, GBM_FORMAT_ARGB8888, GBM_FORMAT_XRGB8888,
+		{ GBM_FORMAT_XRGB8888, 0, GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING },
+		{ GBM_FORMAT_XRGB8888, 0, GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR },
+		{ GBM_FORMAT_ARGB8888, GBM_FORMAT_XRGB8888,
 		  GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING },
-		{ true, GBM_FORMAT_ARGB8888, GBM_FORMAT_XRGB8888,
+		{ GBM_FORMAT_ARGB8888, GBM_FORMAT_XRGB8888,
 		  GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR },
-		{ false, GBM_FORMAT_XRGB8888, 0,
-		  GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING | GBM_BO_USE_LINEAR },
-		{ false, GBM_FORMAT_ARGB8888, 0,
-		  GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING | GBM_BO_USE_LINEAR },
 	};
 	const size_t tcase_count = BS_ARRAY_LEN(tcases);
 
@@ -319,17 +313,13 @@ int main(int argc, char **argv)
 
 		struct gbm_bo *bo = gbm_bo_create(gbm, width, height, tcase->format, tcase->usage);
 
-		bool bo_success = (bo != NULL);
-
-		if (bo_success != tcase->expect_success) {
+		if (!bo) {
 			all_pass = false;
 			printf("failed test case: ");
 			test_case_print(stdout, tcase);
 			printf("\n");
-		}
-
-		if (!bo_success)
 			continue;
+		}
 
 		struct bs_drm_fb_builder *fb_builder = bs_drm_fb_builder_new();
 		bs_drm_fb_builder_gbm_bo(fb_builder, bo);
