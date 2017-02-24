@@ -281,7 +281,7 @@ int main(int argc, char **argv)
 		{ false, GBM_FORMAT_ARGB8888, 0,
 		  GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING | GBM_BO_USE_LINEAR },
 	};
-	const size_t tcase_count = sizeof(tcases) / sizeof(tcases[0]);
+	const size_t tcase_count = BS_ARRAY_LEN(tcases);
 
 	int display_fd = bs_drm_open_main_display();
 	if (display_fd < 0) {
@@ -312,7 +312,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	uint32_t fbs[sizeof(tcases) / sizeof(tcases[0])] = { 0 };
+	uint32_t fbs[BS_ARRAY_LEN(tcases)] = { 0 };
 	bool all_pass = true;
 	for (size_t tcase_index = 0; tcase_index < tcase_count; tcase_index++) {
 		const struct test_case *tcase = &tcases[tcase_index];
