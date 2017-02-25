@@ -297,6 +297,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	uint32_t num_success = 0;
 	for (int c = 0; c < resources->count_crtcs && (crtcs >> c); c++) {
 		int ret;
 		drmModeCrtc *crtc;
@@ -312,8 +313,8 @@ int main(int argc, char **argv)
 
 		bs_drm_pipe_plumber_crtc_mask(plumber, crtc_mask);
 		if (!bs_drm_pipe_plumber_make(plumber, &pipe)) {
-			bs_debug_error("failed to make pipe with crtc mask: %x", crtc_mask);
-			return 1;
+			printf("unable to make pipe with crtc mask: %x\n", crtc_mask);
+			continue;
 		}
 
 		crtc = drmModeGetCrtc(fd, pipe.crtc_id);
@@ -385,10 +386,12 @@ int main(int argc, char **argv)
 		ret = drmModeSetCrtc(fd, pipe.crtc_id, 0, 0, 0, NULL, 0, NULL);
 		if (ret < 0) {
 			bs_debug_error("Could disable CRTC %d %s\n", pipe.crtc_id, strerror(errno));
+			return 1;
 		}
 
 		drmModeRmFB(fd, fb_id);
 		gbm_bo_destroy(bo);
+		num_success++;
 	}
 
 	if (connector != NULL) {
@@ -398,6 +401,11 @@ int main(int argc, char **argv)
 
 	drmModeFreeResources(resources);
 	bs_drm_pipe_plumber_destroy(&plumber);
+
+	if (!num_success) {
+		bs_debug_error("unable to set gamma table on any CRTC");
+		return 1;
+	}
 
 	return 0;
 }
