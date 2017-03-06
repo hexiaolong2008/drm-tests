@@ -156,7 +156,7 @@ static const char help_text[] =
 void print_help(const char * argv0)
 {
 
-	fprintf(stderr, help_text, argv0);
+	printf(help_text, argv0);
 }
 
 static const char optstr[] = "hd:c:";
@@ -201,7 +201,7 @@ int main(int argc, char * argv[])
 		return 1;
 	}
 
-	fprintf(stderr, SUCCESS_COLOR("opened") " vgem device\n");
+	printf(SUCCESS_COLOR("opened") " vgem device\n");
 
 	uint32_t bo_handle;
 	if (bo_size > 0) {
@@ -212,7 +212,7 @@ int main(int argc, char * argv[])
 			ret = 1;
 			goto close_vgem_fd;
 		}
-		fprintf(stderr, SUCCESS_COLOR("created") " vgem buffer object, handle = %u\n",
+		printf(SUCCESS_COLOR("created") " vgem buffer object, handle = %u\n",
 			bo_handle);
 	}
 
@@ -231,13 +231,13 @@ int main(int argc, char * argv[])
 			goto close_vgem_fd;
 		}
 
-		fprintf(stderr, SUCCESS_COLOR("mapped") " vgem buffer object\n");
+		printf(SUCCESS_COLOR("mapped") " vgem buffer object\n");
 
 		write_pattern(bo_ptr, bo_size);
 
 		assert(!munmap((uint32_t *)bo_ptr, bo_size));
 
-		fprintf(stderr, SUCCESS_COLOR("wrote") " to vgem buffer object\n");
+		printf(SUCCESS_COLOR("wrote") " to vgem buffer object\n");
 
 		bo_ptr = mmap_dumb_bo(vgem_fd, bo_handle, bo_size);
 
@@ -249,7 +249,7 @@ int main(int argc, char * argv[])
 
 		assert(!munmap((uint32_t *)bo_ptr, bo_size));
 
-		fprintf(stderr, SUCCESS_COLOR("verified") " vgem buffer object writes\n");
+		printf(SUCCESS_COLOR("verified") " vgem buffer object writes\n");
 	}
 
 	int prime_fd;
@@ -269,7 +269,7 @@ int main(int argc, char * argv[])
 			goto close_vgem_fd;
 		}
 
-		fprintf(stderr, SUCCESS_COLOR("exported") " vgem buffer object, fd = %d\n",
+		printf(SUCCESS_COLOR("exported") " vgem buffer object, fd = %d\n",
 			prime_fd);
 	}
 
@@ -289,7 +289,7 @@ int main(int argc, char * argv[])
 			goto close_vgem_fd;
 		}
 
-		fprintf(stderr, SUCCESS_COLOR("imported") " to vgem buffer object, handle = %d\n",
+		printf(SUCCESS_COLOR("imported") " to vgem buffer object, handle = %d\n",
 			imported_handle);
 
 		volatile uint32_t * bo_ptr = mmap_dumb_bo(vgem_fd,
@@ -301,7 +301,7 @@ int main(int argc, char * argv[])
 			goto close_vgem_fd;
 		}
 
-		fprintf(stderr, SUCCESS_COLOR("mapped") " imported vgem buffer object\n");
+		printf(SUCCESS_COLOR("mapped") " imported vgem buffer object\n");
 
 		if (!verify_pattern(bo_ptr, bo_size))
 		{
@@ -311,7 +311,7 @@ int main(int argc, char * argv[])
 
 		assert(!munmap((uint32_t *)bo_ptr, bo_size));
 
-		fprintf(stderr, SUCCESS_COLOR("verified") " imported vgem buffer object writes\n");
+		printf(SUCCESS_COLOR("verified") " imported vgem buffer object writes\n");
 	}
 
 	if (import_foreign) {
@@ -322,7 +322,7 @@ int main(int argc, char * argv[])
 			goto close_vgem_fd;
 		}
 
-		fprintf(stderr, SUCCESS_COLOR("opened") " non-vgem device\n");
+		printf(SUCCESS_COLOR("opened") " non-vgem device\n");
 
 		struct drm_mode_create_dumb create;
 
@@ -339,7 +339,7 @@ int main(int argc, char * argv[])
 			goto close_dumb_fd;
 		}
 
-		fprintf(stderr, SUCCESS_COLOR("created") " non-vgem buffer object, handle = %u\n",
+		printf(SUCCESS_COLOR("created") " non-vgem buffer object, handle = %u\n",
 			create.handle);
 
 		assert(create.size == create.width * create.height * 4);
@@ -354,7 +354,7 @@ int main(int argc, char * argv[])
 			goto close_dumb_fd;
 		}
 
-		fprintf(stderr, SUCCESS_COLOR("exported") " non-vgem buffer object, fd = %d\n",
+		printf(SUCCESS_COLOR("exported") " non-vgem buffer object, fd = %d\n",
 			foreign_prime_fd);
 
 		uint32_t foreign_imported_handle;
@@ -367,7 +367,7 @@ int main(int argc, char * argv[])
 			goto close_vgem_fd;
 		}
 
-		fprintf(stderr, SUCCESS_COLOR("imported") " to vgem buffer object, handle = %d\n",
+		printf(SUCCESS_COLOR("imported") " to vgem buffer object, handle = %d\n",
 			foreign_imported_handle);
 
 		volatile uint32_t * bo_ptr =
@@ -379,13 +379,13 @@ int main(int argc, char * argv[])
 			goto close_vgem_fd;
 		}
 
-		fprintf(stderr, SUCCESS_COLOR("mapped") " imported non-vgem vgem buffer object\n");
+		printf(SUCCESS_COLOR("mapped") " imported non-vgem vgem buffer object\n");
 
 		write_pattern(bo_ptr, create.size);
 
 		assert(!munmap((uint32_t *)bo_ptr, create.size));
 
-		fprintf(stderr, SUCCESS_COLOR("wrote") " to non-vgem buffer object\n");
+		printf(SUCCESS_COLOR("wrote") " to non-vgem buffer object\n");
 
 		bo_ptr = mmap_dumb_bo(vgem_fd, foreign_imported_handle,
 				      create.size);
@@ -403,7 +403,7 @@ int main(int argc, char * argv[])
 
 		assert(!munmap((uint32_t *)bo_ptr, create.size));
 
-		fprintf(stderr, SUCCESS_COLOR("verified") " imported non-vgem buffer object writes\n");
+		printf(SUCCESS_COLOR("verified") " imported non-vgem buffer object writes\n");
 
 		bo_ptr = mmap_dumb_bo(dumb_fd, create.handle, create.size);
 		if (bo_ptr == MAP_FAILED) {
@@ -418,7 +418,7 @@ int main(int argc, char * argv[])
 			goto close_vgem_fd;
 		}
 
-		fprintf(stderr, SUCCESS_COLOR("verified") " non-vgem buffer object writes\n");
+		printf(SUCCESS_COLOR("verified") " non-vgem buffer object writes\n");
 
 		assert(!munmap((uint32_t *)bo_ptr, create.size));
 
