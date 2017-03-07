@@ -265,7 +265,7 @@ int main(int argc, char **argv)
 		goto terminate_display;
 	}
 
-	if (bs_egl_has_extension(extensions, "EGL_KHR_no_config_context")) {
+	if (bs_egl_has_extension("EGL_KHR_no_config_context", extensions)) {
 		ctx.egl_ctx =
 		    eglCreateContext(ctx.egl_display, NULL /* No Config */,
 				     EGL_NO_CONTEXT /* No shared context */, context_attribs);
