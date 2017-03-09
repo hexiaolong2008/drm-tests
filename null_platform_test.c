@@ -142,12 +142,11 @@ int main(int argc, char **argv)
 	for (size_t fb_index = 0; fb_index < 2; fb_index++) {
 		uint32_t format = GBM_FORMAT_XRGB8888;
 		if (test_page_flip_format_change && fb_index) {
-		  format = GBM_FORMAT_XBGR8888;
+			format = GBM_FORMAT_XBGR8888;
 		}
 
-		bos[fb_index] =
-		    gbm_bo_create(gbm, mode->hdisplay, mode->vdisplay, format,
-				  GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
+		bos[fb_index] = gbm_bo_create(gbm, mode->hdisplay, mode->vdisplay, format,
+					      GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
 		if (bos[fb_index] == NULL) {
 			bs_debug_error("failed to allocate framebuffer");
 			return 1;
