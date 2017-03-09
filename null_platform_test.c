@@ -8,6 +8,8 @@
 
 #include <getopt.h>
 
+#define NUM_BUFFERS 2
+
 static GLuint solid_shader_create()
 {
 	const GLchar *vert =
@@ -135,11 +137,11 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	struct gbm_bo *bos[2];
-	uint32_t ids[2];
-	struct bs_egl_fb *egl_fbs[2];
-	EGLImageKHR egl_images[2];
-	for (size_t fb_index = 0; fb_index < 2; fb_index++) {
+	struct gbm_bo *bos[NUM_BUFFERS];
+	uint32_t ids[NUM_BUFFERS];
+	struct bs_egl_fb *egl_fbs[NUM_BUFFERS];
+	EGLImageKHR egl_images[NUM_BUFFERS];
+	for (size_t fb_index = 0; fb_index < NUM_BUFFERS; fb_index++) {
 		uint32_t format = GBM_FORMAT_XRGB8888;
 		if (test_page_flip_format_change && fb_index) {
 			format = GBM_FORMAT_XBGR8888;
@@ -256,5 +258,15 @@ int main(int argc, char **argv)
 		fb_idx = fb_idx ^ 1;
 	}
 
+	for (size_t fb_index = 0; fb_index < NUM_BUFFERS; fb_index++) {
+		bs_egl_fb_destroy(&egl_fbs[fb_index]);
+		bs_egl_image_destroy(egl, &egl_images[fb_index]);
+		drmModeRmFB(fd, ids[fb_idx]);
+		gbm_bo_destroy(bos[fb_index]);
+	}
+
+	bs_egl_destroy(&egl);
+	gbm_device_destroy(gbm);
+	close(fd);
 	return 0;
 }
