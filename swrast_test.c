@@ -312,6 +312,7 @@ delete_gl_buffers:
 	glDeleteFramebuffers(1, &ctx.gl_fb);
 	glDeleteRenderbuffers(1, &ctx.gl_rb);
 destroy_context:
+	eglMakeCurrent(ctx.egl_display, NULL, NULL, NULL);
 	eglDestroyContext(ctx.egl_display, ctx.egl_ctx);
 terminate_display:
 	eglTerminate(ctx.egl_display);

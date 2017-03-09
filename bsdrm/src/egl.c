@@ -45,6 +45,7 @@ void bs_egl_destroy(struct bs_egl **egl)
 
 	if (self->ctx != EGL_NO_CONTEXT) {
 		assert(self->display != EGL_NO_DISPLAY);
+		eglMakeCurrent(self->display, NULL, NULL, NULL);
 		eglDestroyContext(self->display, self->ctx);
 	}
 
