@@ -9,14 +9,13 @@ CFLAGS += -std=gnu99 -I$(SRC)/bsdrm/include
 CC_STATIC_LIBRARY(libbsdrm.pic.a): \
   bsdrm/src/app.o \
   bsdrm/src/debug.o \
-  bsdrm/src/dma_buf.o \
   bsdrm/src/draw.o \
   bsdrm/src/drm_connectors.o \
   bsdrm/src/drm_fb.o \
   bsdrm/src/drm_open.o \
   bsdrm/src/drm_pipe.o \
-  bsdrm/src/dumb_mmap.o \
   bsdrm/src/egl.o \
   bsdrm/src/gl.o \
+  bsdrm/src/mmap.o \
   bsdrm/src/open.o \
   bsdrm/src/pipe.o

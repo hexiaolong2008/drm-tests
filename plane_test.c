@@ -238,8 +238,7 @@ static bool parse_format(const char *str, const struct bs_draw_format **format)
 			*format = bs_draw_format;
 			return true;
 		}
-	}
-	else {
+	} else {
 		const struct bs_draw_format *bs_draw_format = bs_get_draw_format_from_name(str);
 		if (bs_draw_format) {
 			*format = bs_draw_format;
@@ -439,13 +438,20 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	void *bo_ptr = bs_dma_buf_mmap_plane(bg_bo, 0);
-	if (bo_ptr == NULL) {
+	struct bs_mapper *mapper = bs_mapper_dma_buf_new();
+	if (mapper == NULL) {
+		bs_debug_error("failed to create mapper object");
+		return 1;
+	}
+
+	void *map_data;
+	void *bo_ptr = bs_mapper_map(mapper, bg_bo, 0, &map_data);
+	if (bo_ptr == MAP_FAILED) {
 		bs_debug_error("failed to mmap background buffer object");
 		return 1;
 	}
 	memset(bo_ptr, 0xff, gbm_bo_get_height(bg_bo) * gbm_bo_get_stride(bg_bo));
-	bs_dma_buf_unmmap_plane(bg_bo, 0, bo_ptr);
+	bs_mapper_unmap(mapper, bg_bo, map_data);
 
 	uint32_t crtc_fb_id = bs_drm_fb_create_gbm(bg_bo);
 	if (!crtc_fb_id) {
@@ -480,8 +486,7 @@ int main(int argc, char **argv)
 		if (tp->has_dst_position) {
 			tp->dst_center_x = tp->dst_x + mode.hdisplay / 2;
 			tp->dst_center_y = tp->dst_y + mode.vdisplay / 2;
-		}
-		else {
+		} else {
 			tp->dst_center_x = mode.hdisplay / 2;
 			tp->dst_center_y = mode.vdisplay / 2;
 			tp->dst_x = tp->dst_center_x - tp->dst_w / 2;
@@ -496,7 +501,7 @@ int main(int argc, char **argv)
 		}
 
 		printf("Creating buffer %ux%u %s\n", tp->bo_w, tp->bo_h,
-			bs_get_format_name(tp->format));
+		       bs_get_format_name(tp->format));
 		tp->bo = gbm_bo_create(gbm, tp->bo_w, tp->bo_h, bs_get_pixel_format(tp->format),
 				       GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR);
 		if (!tp->bo) {
@@ -510,7 +515,7 @@ int main(int argc, char **argv)
 			return 1;
 		}
 
-		if (!bs_draw_pattern(tp->bo, tp->format)) {
+		if (!bs_draw_pattern(mapper, tp->bo, tp->format)) {
 			bs_debug_error("failed to draw pattern to buffer object");
 			return 1;
 		}
@@ -569,6 +574,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	bs_mapper_destroy(mapper);
 	for (size_t test_plane_index = 0; test_plane_index < test_planes_count;
 	     test_plane_index++) {
 		struct test_plane *current_plane = &test_planes[test_plane_index];

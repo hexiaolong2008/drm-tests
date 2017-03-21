@@ -15,23 +15,22 @@
  * atomictest
  */
 
-
 #include "bs_drm.h"
 
-#define CHECK(cond)                                                 \
-	do {                                                        \
-		if (!(cond)) {                                      \
-			bs_debug_error("check %s failed", #cond);   \
-			return -1;                                  \
-		}                                                   \
+#define CHECK(cond)                                               \
+	do {                                                      \
+		if (!(cond)) {                                    \
+			bs_debug_error("check %s failed", #cond); \
+			return -1;                                \
+		}                                                 \
 	} while (0)
 
-#define CHECK_RESULT(ret)                                               \
-	do {                                                            \
-		if ((ret) < 0) {                                        \
-			bs_debug_error("failed with error: %d", ret);   \
-			return -1;                                      \
-		}                                                       \
+#define CHECK_RESULT(ret)                                             \
+	do {                                                          \
+		if ((ret) < 0) {                                      \
+			bs_debug_error("failed with error: %d", ret); \
+			return -1;                                    \
+		}                                                     \
 	} while (0)
 
 #define CURSOR_SIZE 64
@@ -114,6 +113,8 @@ struct atomictest_context {
 	struct atomictest_mode *modes;
 	drmModeAtomicReqPtr pset;
 	drmEventContext drm_event_ctx;
+
+	struct bs_mapper *mapper;
 };
 
 struct atomictest {
@@ -190,13 +191,13 @@ static void draw_cursor(struct gbm_bo *bo)
 	void *map_data;
 	uint32_t stride;
 	uint32_t *cursor_ptr = gbm_bo_map(bo, 0, 0, gbm_bo_get_width(bo), gbm_bo_get_height(bo), 0,
-					 &stride, &map_data, 0);
+					  &stride, &map_data, 0);
 	for (size_t y = 0; y < gbm_bo_get_height(bo); y++) {
 		for (size_t x = 0; x < gbm_bo_get_width(bo); x++) {
 			// A white triangle pointing right
 			bool color_white = y > x / 2 && y < (gbm_bo_get_width(bo) - x / 2);
-			cursor_ptr[y * gbm_bo_get_height(bo) + x] = (color_white) ? 0xFFFFFFFF
-										  : 0x00000000;
+			cursor_ptr[y * gbm_bo_get_height(bo) + x] =
+			    (color_white) ? 0xFFFFFFFF : 0x00000000;
 		}
 	}
 
@@ -459,30 +460,6 @@ static int check_mode(struct atomictest_context *ctx, struct atomictest_crtc *cr
 	return ret;
 }
 
-static struct atomictest_context *new_context(uint32_t num_connectors, uint32_t num_crtcs,
-					      uint32_t num_planes)
-{
-	struct atomictest_context *ctx = calloc(1, sizeof(*ctx));
-	ctx->connectors = calloc(num_connectors, sizeof(*ctx->connectors));
-	ctx->crtcs = calloc(num_crtcs, sizeof(*ctx->crtcs));
-	ctx->modes = calloc(1, sizeof(*ctx->modes));
-	for (uint32_t i = 0; i < num_crtcs; i++) {
-		ctx->crtcs[i].planes = calloc(num_planes, sizeof(*ctx->crtcs[i].planes));
-		ctx->crtcs[i].overlay_idx = calloc(num_planes, sizeof(uint32_t));
-		ctx->crtcs[i].primary_idx = calloc(num_planes, sizeof(uint32_t));
-		ctx->crtcs[i].cursor_idx = calloc(num_planes, sizeof(uint32_t));
-	}
-
-	ctx->num_connectors = num_connectors;
-	ctx->num_crtcs = num_crtcs;
-	ctx->num_modes = 1;
-	ctx->pset = drmModeAtomicAlloc();
-	ctx->drm_event_ctx.version = DRM_EVENT_CONTEXT_VERSION;
-	ctx->drm_event_ctx.page_flip_handler = page_flip_handler;
-
-	return ctx;
-}
-
 static void free_context(struct atomictest_context *ctx)
 {
 	for (uint32_t i = 0; i < ctx->num_crtcs; i++) {
@@ -505,7 +482,39 @@ static void free_context(struct atomictest_context *ctx)
 	free(ctx->modes);
 	free(ctx->crtcs);
 	free(ctx->connectors);
+	bs_mapper_destroy(ctx->mapper);
 	free(ctx);
+}
+
+static struct atomictest_context *new_context(uint32_t num_connectors, uint32_t num_crtcs,
+					      uint32_t num_planes)
+{
+	struct atomictest_context *ctx = calloc(1, sizeof(*ctx));
+	ctx->connectors = calloc(num_connectors, sizeof(*ctx->connectors));
+	ctx->crtcs = calloc(num_crtcs, sizeof(*ctx->crtcs));
+	ctx->modes = calloc(1, sizeof(*ctx->modes));
+	for (uint32_t i = 0; i < num_crtcs; i++) {
+		ctx->crtcs[i].planes = calloc(num_planes, sizeof(*ctx->crtcs[i].planes));
+		ctx->crtcs[i].overlay_idx = calloc(num_planes, sizeof(uint32_t));
+		ctx->crtcs[i].primary_idx = calloc(num_planes, sizeof(uint32_t));
+		ctx->crtcs[i].cursor_idx = calloc(num_planes, sizeof(uint32_t));
+	}
+
+	ctx->num_connectors = num_connectors;
+	ctx->num_crtcs = num_crtcs;
+	ctx->num_modes = 1;
+	ctx->pset = drmModeAtomicAlloc();
+	ctx->drm_event_ctx.version = DRM_EVENT_CONTEXT_VERSION;
+	ctx->drm_event_ctx.page_flip_handler = page_flip_handler;
+
+	ctx->mapper = bs_mapper_dma_buf_new();
+	if (ctx->mapper == NULL) {
+		bs_debug_error("failed to create mapper object");
+		free_context(ctx);
+		return NULL;
+	}
+
+	return ctx;
 }
 
 static struct atomictest_context *init_atomictest(int fd)
@@ -706,7 +715,8 @@ static int test_multiple_planes(struct atomictest_context *ctx, struct atomictes
 					const struct bs_draw_format *draw_format =
 					    bs_get_draw_format(yuv_formats[k]);
 					CHECK(draw_format);
-					CHECK(bs_draw_pattern(overlay->bo, draw_format));
+					CHECK(
+					    bs_draw_pattern(ctx->mapper, overlay->bo, draw_format));
 				}
 			}
 
@@ -772,7 +782,7 @@ static int test_video_overlay(struct atomictest_context *ctx, struct atomictest_
 			const struct bs_draw_format *draw_format =
 			    bs_get_draw_format(yuv_formats[j]);
 			CHECK(draw_format);
-			CHECK(bs_draw_pattern(overlay->bo, draw_format));
+			CHECK(bs_draw_pattern(ctx->mapper, overlay->bo, draw_format));
 			while (!move_plane(ctx, crtc, overlay, 20, 20)) {
 				CHECK_RESULT(commit(ctx));
 				usleep(1e6 / 60);
@@ -796,7 +806,7 @@ static int test_fullscreen_video(struct atomictest_context *ctx, struct atomicte
 			    bs_get_draw_format(yuv_formats[j]);
 			CHECK(draw_format);
 
-			CHECK(bs_draw_pattern(primary->bo, draw_format));
+			CHECK(bs_draw_pattern(ctx->mapper, primary->bo, draw_format));
 			CHECK_RESULT(commit(ctx));
 			usleep(1e6);
 		}

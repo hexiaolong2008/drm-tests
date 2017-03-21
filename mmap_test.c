@@ -12,21 +12,17 @@
 
 struct framebuffer {
 	struct gbm_bo *bo;
-	int drm_prime_fd;
-	uint32_t vgem_handle;
 	uint32_t id;
 };
 
-struct context;
-typedef uint32_t *(*mmap_t)(struct context *ctx, struct framebuffer *fb, size_t size);
-
 struct context {
 	int display_fd;
-	int vgem_fd;
 	uint32_t crtc_id;
 
 	struct framebuffer fbs[BUFFERS];
-	mmap_t mmap_fn;
+	struct bs_mapper *mapper;
+
+	int vgem_device_fd;
 };
 
 static void disable_psr()
@@ -107,15 +103,20 @@ static void draw(struct context *ctx)
 		show_sequence(sequences[sequence_index]);
 		for (int frame_index = 0; frame_index < 0x100; frame_index++) {
 			struct framebuffer *fb = &ctx->fbs[fb_idx];
-			size_t bo_stride = gbm_bo_get_stride(fb->bo);
-			size_t bo_size = bo_stride * gbm_bo_get_height(fb->bo);
+			size_t bo_stride = gbm_bo_get_plane_stride(fb->bo, 0);
+			size_t bo_size = gbm_bo_get_plane_size(fb->bo, 0);
 			uint32_t *bo_ptr;
 			volatile uint32_t *ptr;
+			void *map_data;
 
 			for (sequence_subindex = 0; sequence_subindex < 4; sequence_subindex++) {
 				switch (sequences[sequence_index][sequence_subindex]) {
 					case STEP_MMAP:
-						bo_ptr = ctx->mmap_fn(ctx, fb, bo_size);
+						bo_ptr = bs_mapper_map(ctx->mapper, fb->bo, 0,
+								       &map_data);
+						if (bo_ptr == MAP_FAILED)
+							bs_debug_error("failed to mmap gbm bo");
+
 						ptr = bo_ptr;
 						break;
 
@@ -155,7 +156,7 @@ static void draw(struct context *ctx)
 				}
 			}
 
-			munmap(bo_ptr, bo_size);
+			bs_mapper_unmap(ctx->mapper, fb->bo, map_data);
 
 			usleep(1e6 / 120); /* 120 Hz */
 
@@ -164,85 +165,30 @@ static void draw(struct context *ctx)
 	}
 }
 
-static int create_vgem(struct context *ctx)
-{
-	ctx->vgem_fd = bs_drm_open_vgem();
-	if (ctx->vgem_fd < 0)
-		return 1;
-	return 0;
-}
-
-static int vgem_prime_fd_to_handle(struct context *ctx, struct framebuffer *fb)
-{
-	int ret = drmPrimeFDToHandle(ctx->vgem_fd, fb->drm_prime_fd, &fb->vgem_handle);
-	if (ret)
-		return 1;
-	return 0;
-}
-
-static uint32_t *vgem_mmap_internal(struct context *ctx, struct framebuffer *fb, size_t size)
-{
-	return bs_dumb_mmap(ctx->vgem_fd, fb->vgem_handle, size);
-}
-
-static uint32_t *dma_buf_mmap_internal(struct context *ctx, struct framebuffer *fb, size_t size)
-{
-	return bs_dma_buf_mmap(fb->bo);
-}
-
 static const struct option longopts[] = {
 	{ "help", no_argument, NULL, 'h' },
-	{ "use_vgem", no_argument, NULL, 'v' },
-	{ "use_dma_buf", no_argument, NULL, 'd' },
+	{ "dma-buf", no_argument, NULL, 'b' },
+	{ "gem", no_argument, NULL, 'g' },
+	{ "dumb", no_argument, NULL, 'd' },
+	{ "vgem", no_argument, NULL, 'v' },
+	{ "scanout", no_argument, NULL, 's' },
 	{ 0, 0, 0, 0 },
 };
 
 static void print_help(const char *argv0)
 {
-	const char help_text[] =
-	    "Usage: %s [OPTIONS]\n"
-	    " -h, --help\n"
-	    "           Print help.\n"
-	    " -d, --use_dma_buf\n"
-	    "           Use dma_buf mmap.\n"
-	    " -v, --use_vgem\n"
-	    "           Use vgem mmap.\n";
-	printf(help_text, argv0);
+	printf("Usage: %s [OPTIONS]\n", argv0);
+	printf(" -h, --help     Print help.\n");
+	printf(" -b, --dma-buf  Use dma-buf mmap (by default).\n");
+	printf(" -g, --gem      Use GEM map.\n");
+	printf(" -d, --dumb     Use dump map.\n");
+	printf(" -v, --vgem     Use vgem dump map.\n");
+	printf(" -s, --scanout  Use buffer optimized for scanout.\n");
 }
 
 int main(int argc, char **argv)
 {
 	struct context ctx = { 0 };
-
-	bool is_vgem_test = false;
-	bool is_help = false;
-	ctx.mmap_fn = dma_buf_mmap_internal;
-	int c;
-	while ((c = getopt_long(argc, argv, "vdh", longopts, NULL)) != -1) {
-		switch (c) {
-			case 'v':
-				ctx.mmap_fn = vgem_mmap_internal;
-				is_vgem_test = true;
-				break;
-			case 'd':
-				break;
-			case 'h':
-			default:
-				is_help = true;
-				break;
-		}
-	}
-
-	if (is_help) {
-		print_help(argv[0]);
-		return 1;
-	}
-
-	if (is_vgem_test) {
-		printf("started vgem mmap test.\n");
-	} else {
-		printf("started dma_buf mmap test.\n");
-	}
 
 	do_fixes();
 
@@ -252,14 +198,51 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if (is_vgem_test && create_vgem(&ctx)) {
-		bs_debug_error("failed to open vgem card");
-		return 1;
-	}
-
 	struct gbm_device *gbm = gbm_create_device(ctx.display_fd);
 	if (!gbm) {
 		bs_debug_error("failed to create gbm device");
+		return 1;
+	}
+
+	int c;
+	uint32_t flags = GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR;
+	while ((c = getopt_long(argc, argv, "bgdvsh", longopts, NULL)) != -1) {
+		switch (c) {
+			case 'b':
+				ctx.mapper = bs_mapper_dma_buf_new();
+				printf("started dma-buf mmap.\n");
+				break;
+			case 'g':
+				ctx.mapper = bs_mapper_gem_new();
+				printf("started GEM map.\n");
+				break;
+			case 'd':
+				ctx.mapper = bs_mapper_dumb_new(gbm_device_get_fd(gbm));
+				printf("started dumb map.\n");
+				break;
+			case 'v':
+				ctx.vgem_device_fd = bs_drm_open_vgem();
+				ctx.mapper = bs_mapper_dumb_new(ctx.vgem_device_fd);
+				printf("started vgem map.\n");
+				break;
+			case 's':
+				flags = GBM_BO_USE_SCANOUT;
+				break;
+			case 'h':
+			default:
+				print_help(argv[0]);
+				return 1;
+		}
+	}
+
+	// Use dma-buf mmap by default, in case any arguments aren't selected.
+	if (!ctx.mapper) {
+		ctx.mapper = bs_mapper_dma_buf_new();
+		printf("started dma-buf mmap.\n");
+	}
+
+	if (ctx.mapper == NULL) {
+		bs_debug_error("failed to create mapper object");
 		return 1;
 	}
 
@@ -277,8 +260,8 @@ int main(int argc, char **argv)
 
 	for (size_t fb_index = 0; fb_index < BUFFERS; ++fb_index) {
 		struct framebuffer *fb = &ctx.fbs[fb_index];
-		fb->bo = gbm_bo_create(gbm, mode->hdisplay, mode->vdisplay, GBM_FORMAT_XRGB8888,
-				       GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR);
+		fb->bo =
+		    gbm_bo_create(gbm, mode->hdisplay, mode->vdisplay, GBM_FORMAT_XRGB8888, flags);
 
 		if (!fb->bo) {
 			bs_debug_error("failed to create buffer object");
@@ -288,17 +271,6 @@ int main(int argc, char **argv)
 		fb->id = bs_drm_fb_create_gbm(fb->bo);
 		if (fb->id == 0) {
 			bs_debug_error("failed to create fb");
-			return 1;
-		}
-
-		fb->drm_prime_fd = gbm_bo_get_fd(fb->bo);
-		if (fb->drm_prime_fd < 0) {
-			bs_debug_error("failed to turn handle into fd");
-			return 1;
-		}
-
-		if (is_vgem_test && vgem_prime_fd_to_handle(&ctx, fb)) {
-			bs_debug_error("failed to import handle");
 			return 1;
 		}
 	}

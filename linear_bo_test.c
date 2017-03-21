@@ -213,7 +213,8 @@ out:
 	return success;
 }
 
-static bool test_case_draw_dma_buf(const struct test_case *tcase, struct gbm_bo *bo)
+static bool test_case_draw_dma_buf(const struct test_case *tcase, struct bs_mapper *mapper,
+				   struct gbm_bo *bo)
 {
 	int bo_fd = gbm_bo_get_fd(bo);
 	if (bo_fd < 0) {
@@ -223,8 +224,9 @@ static bool test_case_draw_dma_buf(const struct test_case *tcase, struct gbm_bo 
 	uint32_t width = gbm_bo_get_width(bo);
 	uint32_t height = gbm_bo_get_height(bo);
 	uint32_t stride = gbm_bo_get_stride(bo);
-	uint8_t *ptr = bs_dma_buf_mmap(bo);
-	if (!ptr) {
+	void *map_data;
+	uint8_t *ptr = bs_mapper_map(mapper, bo, 0, &map_data);
+	if (ptr == MAP_FAILED) {
 		bs_debug_error("failed to mmap gbm bo");
 		return false;
 	}
@@ -260,7 +262,7 @@ static bool test_case_draw_dma_buf(const struct test_case *tcase, struct gbm_bo 
 		}
 	}
 
-	bs_dma_buf_unmmap(bo, ptr);
+	bs_mapper_unmap(mapper, bo, map_data);
 
 	return true;
 }
@@ -307,6 +309,12 @@ int main(int argc, char **argv)
 	}
 
 	uint32_t fbs[BS_ARRAY_LEN(tcases)] = { 0 };
+	struct bs_mapper *mapper = bs_mapper_dma_buf_new();
+	if (mapper == NULL) {
+		bs_debug_error("failed to create mapper object");
+		return 1;
+	}
+
 	bool all_pass = true;
 	for (size_t tcase_index = 0; tcase_index < tcase_count; tcase_index++) {
 		const struct test_case *tcase = &tcases[tcase_index];
@@ -333,7 +341,7 @@ int main(int argc, char **argv)
 		}
 
 		if (tcase->usage & GBM_BO_USE_LINEAR) {
-			if (!test_case_draw_dma_buf(tcase, bo)) {
+			if (!test_case_draw_dma_buf(tcase, mapper, bo)) {
 				bs_debug_error("failed to draw to buffer using vgem");
 				return 1;
 			}
@@ -347,6 +355,8 @@ int main(int argc, char **argv)
 		// Reference held in kernel by the frame buffer.
 		gbm_bo_destroy(bo);
 	}
+
+	bs_mapper_destroy(mapper);
 
 	for (size_t tcase_index = 0; tcase_index < tcase_count; tcase_index++) {
 		const struct test_case *tcase = &tcases[tcase_index];

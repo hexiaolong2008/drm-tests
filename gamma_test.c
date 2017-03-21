@@ -96,7 +96,7 @@ static drmModeModeInfoPtr find_best_mode(int mode_count, drmModeModeInfoPtr mode
 	return &modes[0];
 }
 
-static bool draw_pattern(struct gbm_bo *bo)
+static bool draw_pattern(struct bs_mapper *mapper, struct gbm_bo *bo)
 {
 	const uint32_t stride = gbm_bo_get_stride(bo);
 	const uint32_t height = gbm_bo_get_height(bo);
@@ -104,8 +104,9 @@ static bool draw_pattern(struct gbm_bo *bo)
 	const uint32_t stripw = gbm_bo_get_width(bo) / 256;
 	const uint32_t striph = height / 4;
 
-	uint8_t *bo_ptr = bs_dma_buf_mmap(bo);
-	if (!bo_ptr) {
+	void *map_data;
+	uint8_t *bo_ptr = bs_mapper_map(mapper, bo, 0, &map_data);
+	if (bo_ptr == MAP_FAILED) {
 		bs_debug_error("failed to mmap buffer while drawing pattern");
 		return false;
 	}
@@ -147,7 +148,7 @@ static bool draw_pattern(struct gbm_bo *bo)
 	}
 
 out:
-	bs_dma_buf_unmmap(bo, bo_ptr);
+	bs_mapper_unmap(mapper, bo, map_data);
 	return success;
 }
 
@@ -297,6 +298,12 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	struct bs_mapper *mapper = bs_mapper_dma_buf_new();
+	if (mapper == NULL) {
+		bs_debug_error("failed to create mapper object");
+		return 1;
+	}
+
 	uint32_t num_success = 0;
 	for (int c = 0; c < resources->count_crtcs && (crtcs >> c); c++) {
 		int ret;
@@ -359,7 +366,7 @@ int main(int argc, char **argv)
 			return 1;
 		}
 
-		if (!draw_pattern(bo)) {
+		if (!draw_pattern(mapper, bo)) {
 			bs_debug_error("failed to draw pattern on buffer object");
 			return 1;
 		}
@@ -393,6 +400,7 @@ int main(int argc, char **argv)
 		gbm_bo_destroy(bo);
 		num_success++;
 	}
+	bs_mapper_destroy(mapper);
 
 	if (connector != NULL) {
 		drmModeFreeConnector(connector);

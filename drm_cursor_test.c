@@ -60,8 +60,15 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	uint8_t *fb_ptr = bs_dma_buf_mmap(fb_bo);
-	if (fb_ptr == NULL) {
+	struct bs_mapper *mapper = bs_mapper_dma_buf_new();
+	if (mapper == NULL) {
+		bs_debug_error("failed to create mapper object");
+		return 1;
+	}
+
+	void *map_data;
+	uint8_t *fb_ptr = bs_mapper_map(mapper, fb_bo, 0, &map_data);
+	if (fb_ptr == MAP_FAILED) {
 		bs_debug_error("failed to mmap frame buffer object");
 		return 1;
 	}
@@ -75,7 +82,7 @@ int main(int argc, char **argv)
 			fb_ptr[y * stride + x * 4 + 3] = 0;
 		}
 	}
-	bs_dma_buf_unmmap(fb_bo, fb_ptr);
+	bs_mapper_unmap(mapper, fb_bo, map_data);
 
 	uint32_t fb_id = bs_drm_fb_create_gbm(fb_bo);
 	if (!fb_id) {
@@ -97,8 +104,8 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	uint8_t *cursor_ptr = bs_dma_buf_mmap(cursor_bo);
-	if (cursor_ptr == NULL) {
+	uint8_t *cursor_ptr = bs_mapper_map(mapper, cursor_bo, 0, &map_data);
+	if (cursor_ptr == MAP_FAILED) {
 		bs_debug_error("failed to mmap cursor buffer object");
 		return 1;
 	}
@@ -110,7 +117,7 @@ int main(int argc, char **argv)
 			       4);
 		}
 	}
-	bs_dma_buf_unmmap(cursor_bo, cursor_ptr);
+	bs_mapper_unmap(mapper, cursor_bo, map_data);
 
 	ret = drmModeSetCursor(fd, crtc_id, gbm_bo_get_handle(cursor_bo).u32, cursor_size,
 			       cursor_size);
@@ -134,6 +141,7 @@ int main(int argc, char **argv)
 		}
 	}
 
+	bs_mapper_destroy(mapper);
 	drmModeRmFB(fd, fb_id);
 	gbm_bo_destroy(fb_bo);
 	gbm_bo_destroy(cursor_bo);

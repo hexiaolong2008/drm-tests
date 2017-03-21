@@ -143,15 +143,6 @@ int bs_drm_open_for_display();
 int bs_drm_open_main_display();
 int bs_drm_open_vgem();
 
-// dumb_mmap.c
-void *bs_dumb_mmap(int fd, uint32_t handle, size_t size);
-
-// dma_buf.c
-void *bs_dma_buf_mmap(struct gbm_bo *bo);
-void *bs_dma_buf_mmap_plane(struct gbm_bo *bo, size_t plane);
-int bs_dma_buf_unmmap(struct gbm_bo *bo, void *addr);
-int bs_dma_buf_unmmap_plane(struct gbm_bo *bo, size_t plane, void *addr);
-
 // egl.c
 struct bs_egl;
 struct bs_egl_fb;
@@ -203,11 +194,21 @@ uint32_t bs_app_fb_id(struct bs_app *self, size_t index);
 bool bs_app_setup(struct bs_app *self);
 int bs_app_display_fb(struct bs_app *self, size_t index);
 
+// mmap.c
+struct bs_mapper;
+struct bs_mapper *bs_mapper_dma_buf_new();
+struct bs_mapper *bs_mapper_gem_new();
+struct bs_mapper *bs_mapper_dumb_new(int device_fd);
+void bs_mapper_destroy(struct bs_mapper *mapper);
+void *bs_mapper_map(struct bs_mapper *mapper, struct gbm_bo *bo, size_t plane, void **map_data);
+void bs_mapper_unmap(struct bs_mapper *mapper, struct gbm_bo *bo, void *map_data);
+
 // draw.c
 
 struct bs_draw_format;
 
-bool bs_draw_pattern(struct gbm_bo *bo, const struct bs_draw_format *format);
+bool bs_draw_pattern(struct bs_mapper *mapper, struct gbm_bo *bo,
+		     const struct bs_draw_format *format);
 const struct bs_draw_format *bs_get_draw_format(uint32_t pixel_format);
 const struct bs_draw_format *bs_get_draw_format_from_name(const char *str);
 uint32_t bs_get_pixel_format(const struct bs_draw_format *format);

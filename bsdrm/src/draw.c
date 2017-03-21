@@ -70,6 +70,7 @@ static const struct bs_draw_format bs_draw_formats[] = {
 struct draw_plane {
 	uint32_t row_stride;
 	uint8_t *ptr;
+	void *map_data;
 };
 
 static uint8_t clampbyte(float f)
@@ -88,37 +89,40 @@ uint8_t static convert_color(const struct draw_format_component *comp, uint8_t r
 			 b * comp->rgb_coeffs[2]);
 }
 
-static void unmmap_planes(struct gbm_bo *bo, size_t num_planes, struct draw_plane *planes)
+static void unmmap_planes(struct bs_mapper *mapper, struct gbm_bo *bo, size_t num_planes,
+			  struct draw_plane *planes)
 {
 	for (uint32_t plane_index = 0; plane_index < num_planes; plane_index++)
-		bs_dma_buf_unmmap_plane(bo, plane_index, planes[plane_index].ptr);
+		bs_mapper_unmap(mapper, bo, planes[plane_index].map_data);
 }
 
-static size_t mmap_planes(struct gbm_bo *bo, struct draw_plane planes[GBM_MAX_PLANES])
+static size_t mmap_planes(struct bs_mapper *mapper, struct gbm_bo *bo,
+			  struct draw_plane planes[GBM_MAX_PLANES])
 {
 	size_t num_planes = gbm_bo_get_num_planes(bo);
 	for (size_t plane_index = 0; plane_index < num_planes; plane_index++) {
 		struct draw_plane *plane = &planes[plane_index];
 		plane->row_stride = gbm_bo_get_plane_stride(bo, plane_index);
-		plane->ptr = bs_dma_buf_mmap_plane(bo, plane_index);
-		if (!plane->ptr) {
+		plane->ptr = bs_mapper_map(mapper, bo, plane_index, &plane->map_data);
+		if (plane->ptr == MAP_FAILED) {
 			bs_debug_error("failed to mmap plane %zu of buffer object", plane_index);
-			unmmap_planes(bo, plane_index, planes);
+			unmmap_planes(mapper, bo, plane_index, planes);
 			return 0;
 		}
 	}
 
-	return true;
+	return num_planes;
 }
 
-bool bs_draw_pattern(struct gbm_bo *bo, const struct bs_draw_format *format)
+bool bs_draw_pattern(struct bs_mapper *mapper, struct gbm_bo *bo,
+		     const struct bs_draw_format *format)
 {
 	const uint32_t width = gbm_bo_get_width(bo);
 	const uint32_t height = gbm_bo_get_height(bo);
 	const uint32_t striph = height / 4;
 
 	struct draw_plane planes[GBM_MAX_PLANES];
-	size_t num_planes = mmap_planes(bo, planes);
+	size_t num_planes = mmap_planes(mapper, bo, planes);
 	if (num_planes == 0) {
 		bs_debug_error("failed to prepare to draw pattern to buffer object");
 		return false;
@@ -169,13 +173,14 @@ bool bs_draw_pattern(struct gbm_bo *bo, const struct bs_draw_format *format)
 		}
 	}
 
-	unmmap_planes(bo, num_planes, planes);
+	unmmap_planes(mapper, bo, num_planes, planes);
 	return true;
 }
 
 const struct bs_draw_format *bs_get_draw_format(uint32_t pixel_format)
 {
-	for (size_t format_index = 0; BS_ARRAY_LEN(bs_draw_formats); format_index++) {
+	for (size_t format_index = 0; format_index < BS_ARRAY_LEN(bs_draw_formats);
+	     format_index++) {
 		const struct bs_draw_format *format = &bs_draw_formats[format_index];
 		if (format->pixel_format == pixel_format)
 			return format;
@@ -186,7 +191,8 @@ const struct bs_draw_format *bs_get_draw_format(uint32_t pixel_format)
 
 const struct bs_draw_format *bs_get_draw_format_from_name(const char *str)
 {
-	for (size_t format_index = 0; BS_ARRAY_LEN(bs_draw_formats); format_index++) {
+	for (size_t format_index = 0; format_index < BS_ARRAY_LEN(bs_draw_formats);
+	     format_index++) {
 		const struct bs_draw_format *format = &bs_draw_formats[format_index];
 		if (!strcmp(str, format->name))
 			return format;
