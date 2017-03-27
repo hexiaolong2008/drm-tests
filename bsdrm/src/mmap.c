@@ -4,7 +4,21 @@
  * found in the LICENSE file.
  */
 
+#include <linux/dma-buf.h>
+#include <sys/ioctl.h>
+
 #include "bs_drm.h"
+
+#define HANDLE_EINTR(x)                                                  \
+	({                                                               \
+		int eintr_wrapper_counter = 0;                           \
+		int eintr_wrapper_result;                                \
+		do {                                                     \
+			eintr_wrapper_result = (x);                      \
+		} while (eintr_wrapper_result == -1 && errno == EINTR && \
+			 eintr_wrapper_counter++ < 100);                 \
+		eintr_wrapper_result;                                    \
+	})
 
 struct bs_map_info {
 	size_t plane_index;
@@ -42,15 +56,29 @@ static void *dma_buf_map(struct bs_mapper *mapper, struct gbm_bo *bo, size_t pla
 		ptr += gbm_bo_get_plane_offset(bo, plane);
 	}
 
+	struct dma_buf_sync sync_start = { 0 };
+	sync_start.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_RW;
+	int ret = HANDLE_EINTR(ioctl(drm_prime_fd, DMA_BUF_IOCTL_SYNC, &sync_start));
+	if (ret)
+		bs_debug_error("DMA_BUF_IOCTL_SYNC failed");
+
 	close(drm_prime_fd);
 	return ptr;
 }
 
 static void dma_buf_unmap(struct gbm_bo *bo, struct bs_map_info *info)
 {
+	struct dma_buf_sync sync_end = { 0 };
+	sync_end.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_RW;
+	int drm_prime_fd = gbm_bo_get_plane_fd(bo, info->plane_index);
+	int ret = HANDLE_EINTR(ioctl(drm_prime_fd, DMA_BUF_IOCTL_SYNC, &sync_end));
+	close(drm_prime_fd);
+	if (ret)
+		bs_debug_error("DMA_BUF_IOCTL_SYNC failed");
+
 	void *addr = info->ptr;
 	addr -= gbm_bo_get_plane_offset(bo, info->plane_index);
-	int ret = munmap(addr, gbm_bo_get_plane_size(bo, info->plane_index));
+	ret = munmap(addr, gbm_bo_get_plane_size(bo, info->plane_index));
 	if (ret)
 		bs_debug_error("dma-buf unmap failed.");
 }
