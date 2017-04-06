@@ -163,36 +163,53 @@ bool bs_egl_make_current(struct bs_egl *self)
 			      EGL_NO_SURFACE /* No default draw read */, self->ctx);
 }
 
-static EGLImageKHR _bs_egl_image_create(struct bs_egl *self, int prime_fd, int width, int height,
-					uint32_t format, int pitch, int offset,
-					uint64_t *format_modifier)
+EGLImageKHR bs_egl_image_create_gbm(struct bs_egl *self, struct gbm_bo *bo)
 {
 	assert(self);
 	assert(self->CreateImageKHR);
 	assert(self->display != EGL_NO_DISPLAY);
-	EGLint khr_image_attrs[17] = { EGL_DMA_BUF_PLANE0_FD_EXT,
-				       prime_fd,
-				       EGL_WIDTH,
-				       width,
-				       EGL_HEIGHT,
-				       height,
-				       EGL_LINUX_DRM_FOURCC_EXT,
-				       (int)format,
-				       EGL_DMA_BUF_PLANE0_PITCH_EXT,
-				       pitch,
-				       EGL_DMA_BUF_PLANE0_OFFSET_EXT,
-				       offset,
-				       EGL_NONE };
+	assert(bo);
 
-	if (self->use_dma_buf_import_modifiers) {
-		assert(format_modifier);
-		uint64_t modifier = format_modifier ? *format_modifier : 0;
-		khr_image_attrs[12] = EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT;
-		khr_image_attrs[13] = modifier & 0xfffffffful;
-		khr_image_attrs[14] = EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT;
-		khr_image_attrs[15] = modifier >> 32;
-		khr_image_attrs[16] = EGL_NONE;
+	int fds[GBM_MAX_PLANES];
+	for (size_t plane = 0; plane < gbm_bo_get_num_planes(bo); plane++) {
+		fds[plane] = gbm_bo_get_plane_fd(bo, plane);
+		if (fds[plane] < 0) {
+			bs_debug_error("failed to get fb for bo: %d", fds[plane]);
+			return EGL_NO_IMAGE_KHR;
+		}
 	}
+
+	// When the bo has 3 planes with modifier support, it requires 37 components.
+	EGLint khr_image_attrs[37] = {
+		EGL_WIDTH,
+		gbm_bo_get_width(bo),
+		EGL_HEIGHT,
+		gbm_bo_get_height(bo),
+		EGL_LINUX_DRM_FOURCC_EXT,
+		(int)gbm_bo_get_format(bo),
+		EGL_NONE,
+	};
+
+	size_t attrs_index = 6;
+	for (size_t plane = 0; plane < gbm_bo_get_num_planes(bo); plane++) {
+		khr_image_attrs[attrs_index++] = EGL_DMA_BUF_PLANE0_FD_EXT + plane * 3;
+		khr_image_attrs[attrs_index++] = fds[plane];
+		khr_image_attrs[attrs_index++] = EGL_DMA_BUF_PLANE0_OFFSET_EXT + plane * 3;
+		khr_image_attrs[attrs_index++] = gbm_bo_get_plane_offset(bo, plane);
+		khr_image_attrs[attrs_index++] = EGL_DMA_BUF_PLANE0_PITCH_EXT + plane * 3;
+		khr_image_attrs[attrs_index++] = gbm_bo_get_plane_stride(bo, plane);
+		if (self->use_dma_buf_import_modifiers) {
+			const uint64_t modifier = gbm_bo_get_format_modifier(bo);
+			khr_image_attrs[attrs_index++] =
+			    EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT + plane * 2;
+			khr_image_attrs[attrs_index++] = modifier & 0xfffffffful;
+			khr_image_attrs[attrs_index++] =
+			    EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT + plane * 2;
+			khr_image_attrs[attrs_index++] = modifier >> 32;
+		}
+	}
+
+	khr_image_attrs[attrs_index++] = EGL_NONE;
 
 	EGLImageKHR image =
 	    self->CreateImageKHR(self->display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT,
@@ -203,35 +220,11 @@ static EGLImageKHR _bs_egl_image_create(struct bs_egl *self, int prime_fd, int w
 		return EGL_NO_IMAGE_KHR;
 	}
 
-	return image;
-}
-
-EGLImageKHR bs_egl_image_create(struct bs_egl *self, int prime_fd, int width, int height,
-				uint32_t format, int pitch, int offset)
-{
-	return _bs_egl_image_create(self, prime_fd, width, height, format, pitch, offset, NULL);
-}
-
-EGLImageKHR bs_egl_image_create_with_modifier(struct bs_egl *self, int prime_fd, int width,
-					      int height, uint32_t format, int pitch, int offset,
-					      uint64_t format_modifier)
-{
-	return _bs_egl_image_create(self, prime_fd, width, height, format, pitch, offset,
-				    &format_modifier);
-}
-
-EGLImageKHR bs_egl_image_create_gbm(struct bs_egl *self, struct gbm_bo *bo)
-{
-	assert(bo);
-	int fd = gbm_bo_get_fd(bo);
-	if (fd < 0) {
-		bs_debug_error("failed to get fb for bo: %d", fd);
-		return EGL_NO_IMAGE_KHR;
+	for (size_t plane = 0; plane < gbm_bo_get_num_planes(bo); plane++) {
+		close(fds[plane]);
 	}
-	uint64_t modifier = self->use_dma_buf_import_modifiers ? gbm_bo_get_format_modifier(bo) : 0;
-	return bs_egl_image_create_with_modifier(
-	    self, fd, gbm_bo_get_width(bo), gbm_bo_get_height(bo), gbm_bo_get_format(bo),
-	    gbm_bo_get_stride(bo), 0 /* no offset */, modifier);
+
+	return image;
 }
 
 void bs_egl_image_destroy(struct bs_egl *self, EGLImageKHR *image)

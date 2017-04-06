@@ -152,11 +152,6 @@ void bs_egl_destroy(struct bs_egl **egl);
 bool bs_egl_setup(struct bs_egl *self);
 bool bs_egl_make_current(struct bs_egl *self);
 
-EGLImageKHR bs_egl_image_create(struct bs_egl *self, int prime_fd, int width, int height,
-				uint32_t format, int pitch, int offset);
-EGLImageKHR bs_egl_image_create_with_modifier(struct bs_egl *self, int prime_fd, int width,
-					      int height, uint32_t format, int pitch, int offset,
-					      uint64_t format_modifier);
 EGLImageKHR bs_egl_image_create_gbm(struct bs_egl *self, struct gbm_bo *bo);
 void bs_egl_image_destroy(struct bs_egl *self, EGLImageKHR *image);
 bool bs_egl_image_flush_external(struct bs_egl *self, EGLImageKHR image);
