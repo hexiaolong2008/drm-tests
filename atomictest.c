@@ -37,6 +37,15 @@
 
 #define CURSOR_SIZE 64
 
+// TODO(gsingh) This is defined in upstream libdrm -- remove when CROS libdrm is updated.
+#ifndef DRM_ROTATE_0
+#define DRM_ROTATE_0 (1UL << 0)
+#endif
+
+#ifndef DRM_REFLECT_Y
+#define DRM_REFLECT_Y (1UL << 5)
+#endif
+
 static const uint32_t yuv_formats[] = {
 	DRM_FORMAT_NV12, DRM_FORMAT_UYVY, DRM_FORMAT_YUYV, DRM_FORMAT_YVU420,
 };
@@ -73,6 +82,7 @@ struct atomictest_plane {
 	struct atomictest_property src_h;
 	struct atomictest_property type;
 	struct atomictest_property zpos;
+	struct atomictest_property rotation;
 };
 
 struct atomictest_connector {
@@ -272,6 +282,13 @@ static int get_plane_props(int fd, struct atomictest_plane *plane, drmModeObject
 	CHECK_RESULT(get_prop(fd, props, "SRC_W", &plane->src_w));
 	CHECK_RESULT(get_prop(fd, props, "SRC_H", &plane->src_h));
 	CHECK_RESULT(get_prop(fd, props, "type", &plane->type));
+
+	/*
+	 * The atomic API makes no guarantee a property is present in object. This test
+	 * requires the above common properties since a plane is undefined without them.
+	 * Other properties (i.e, rotation) are optional.
+	 */
+	get_prop(fd, props, "rotation", &plane->rotation);
 	return 0;
 }
 
@@ -303,6 +320,10 @@ int set_plane_props(struct atomictest_plane *plane, drmModeAtomicReqPtr pset)
 	CHECK_RESULT(drmModeAtomicAddProperty(pset, id, plane->src_y.pid, plane->src_y.value));
 	CHECK_RESULT(drmModeAtomicAddProperty(pset, id, plane->src_w.pid, plane->src_w.value));
 	CHECK_RESULT(drmModeAtomicAddProperty(pset, id, plane->src_h.pid, plane->src_h.value));
+	if (plane->rotation.pid)
+		CHECK_RESULT(
+		    drmModeAtomicAddProperty(pset, id, plane->rotation.pid, plane->rotation.value));
+
 	return 0;
 }
 
@@ -371,6 +392,9 @@ static int disable_plane(struct atomictest_context *ctx, struct atomictest_plane
 	plane->zpos.value = 0;
 	plane->crtc_id.value = 0;
 
+	if (plane->rotation.pid)
+		plane->rotation.value = DRM_ROTATE_0;
+
 	CHECK_RESULT(remove_plane_fb(ctx, plane));
 	CHECK_RESULT(set_plane_props(plane, ctx->pset));
 	return 0;
@@ -388,6 +412,11 @@ static int move_plane(struct atomictest_context *ctx, struct atomictest_crtc *cr
 	}
 
 	return -1;
+}
+
+static int test_commit(struct atomictest_context *ctx)
+{
+	return drmModeAtomicCommit(ctx->fd, ctx->pset, DRM_MODE_ATOMIC_TEST_ONLY, NULL);
 }
 
 static int commit(struct atomictest_context *ctx)
@@ -786,6 +815,60 @@ static int test_video_overlay(struct atomictest_context *ctx, struct atomictest_
 	return 0;
 }
 
+static int test_orientation(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
+{
+	struct atomictest_plane *primary, *overlay;
+	for (uint32_t i = 0; i < crtc->num_overlay; i++) {
+		overlay = get_plane(crtc, i, DRM_PLANE_TYPE_OVERLAY);
+		if (!overlay->rotation.pid)
+			continue;
+
+		CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
+					crtc->height, 0, crtc->crtc_id));
+
+		overlay->rotation.value = DRM_ROTATE_0;
+		set_plane_props(overlay, ctx->pset);
+		CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_LINES));
+		CHECK_RESULT(commit(ctx));
+		usleep(1e6);
+
+		overlay->rotation.value = DRM_REFLECT_Y;
+		set_plane_props(overlay, ctx->pset);
+		if (!test_commit(ctx)) {
+			CHECK_RESULT(commit(ctx));
+			usleep(1e6);
+		}
+
+		CHECK_RESULT(disable_plane(ctx, overlay));
+	}
+
+	for (uint32_t i = 0; i < crtc->num_primary; i++) {
+		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
+		if (!primary->rotation.pid)
+			continue;
+
+		CHECK_RESULT(init_plane(ctx, primary, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
+					crtc->height, 0, crtc->crtc_id));
+
+		primary->rotation.value = DRM_ROTATE_0;
+		set_plane_props(primary, ctx->pset);
+		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_LINES));
+		CHECK_RESULT(commit(ctx));
+		usleep(1e6);
+
+		primary->rotation.value = DRM_REFLECT_Y;
+		set_plane_props(primary, ctx->pset);
+		if (!test_commit(ctx)) {
+			CHECK_RESULT(commit(ctx));
+			usleep(1e6);
+		}
+
+		CHECK_RESULT(disable_plane(ctx, primary));
+	}
+
+	return 0;
+}
+
 static int test_fullscreen_video(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
 {
 	struct atomictest_plane *primary;
@@ -863,6 +946,7 @@ static const struct atomictest_testcase cases[] = {
 	{ "overlay_pageflip", test_overlay_pageflip },
 	{ "primary_pageflip", test_primary_pageflip },
 	{ "video_overlay", test_video_overlay },
+	{ "orientation", test_orientation },
 };
 
 static int run_testcase(struct atomictest_context *ctx, struct atomictest_crtc *crtc,
