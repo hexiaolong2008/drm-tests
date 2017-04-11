@@ -178,7 +178,7 @@ static bool init_gl(struct bs_egl_fb *fb, uint32_t width, uint32_t height,
 	glBindFramebuffer(GL_FRAMEBUFFER, bs_egl_fb_name(fb));
 	glViewport(0, 0, (GLint)width, (GLint)height);
 
-	glClearColor(1.0f, 0.0f, 1.0f, 1.0f);
+	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	glUseProgram(resources->program);
@@ -193,7 +193,7 @@ static bool init_gl(struct bs_egl_fb *fb, uint32_t width, uint32_t height,
 	return true;
 }
 
-static void draw_textured_quad(GLuint tex, uint32_t width, uint32_t height)
+static void draw_textured_quad(GLuint tex)
 {
 	glClear(GL_COLOR_BUFFER_BIT);
 	glActiveTexture(GL_TEXTURE1);
@@ -367,7 +367,7 @@ int main(int argc, char **argv)
 			goto destroy_gl_resources;
 		}
 
-		draw_textured_quad(buffer.tex, width, height);
+		draw_textured_quad(buffer.tex);
 
 		flush_egl(egl, back_fb->image);
 

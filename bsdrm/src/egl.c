@@ -133,10 +133,10 @@ bool bs_egl_setup(struct bs_egl *self)
 		goto destroy_context;
 	}
 
-	if (!bs_egl_has_extension("EGL_EXT_KHR_fence_sync", egl_extensions) &&
-	    !bs_egl_has_extension("EGL_KHR_reusable_sync", egl_extensions)) {
+	if (!bs_egl_has_extension("EGL_KHR_fence_sync", egl_extensions) &&
+	    !bs_egl_has_extension("EGL_KHR_wait_sync", egl_extensions)) {
 		bs_debug_error(
-		    "EGL_EXT_KHR_fence_sync and EGL_KHR_reusable_sync extension not supported");
+		    "EGL_KHR_fence_sync and EGL_KHR_wait_sync extension not supported");
 		goto destroy_context;
 	}
 

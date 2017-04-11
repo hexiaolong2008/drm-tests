@@ -209,18 +209,19 @@ static void compute_stripe(struct draw_data *data)
 
 static void compute_ellipse(struct draw_data *data)
 {
-	data->out_color[0] = data->out_color[2] = data->out_color[3] = 0;
-	data->out_color[1] = (int)(data->progress * 255);
 	float xratio = ((int)data->x - (int)data->w / 2) / ((float)(data->w / 2));
 	float yratio = ((int)data->y - (int)data->h / 2) / ((float)(data->h / 2));
 
 	// If a point is on or inside an ellipse, num <= 1.
 	float num = xratio * xratio + yratio * yratio;
-	uint32_t r = 255 * num;
+	uint32_t g = 255 * num;
 
-	if (r < 256) {
-		data->out_color[1] = data->out_color[2] = data->out_color[3] = 0;
-		data->out_color[0] = r;
+	if (g < 256) {
+		memset(data->out_color, 0, 4);
+		data->out_color[2] = 0xFF;
+		data->out_color[1] = g;
+	} else {
+		memset(data->out_color, (uint8_t)(data->progress * 255), 4);
 	}
 }
 
