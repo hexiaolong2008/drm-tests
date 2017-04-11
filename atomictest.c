@@ -162,14 +162,12 @@ static struct atomictest_plane *get_plane(struct atomictest_crtc *crtc, uint32_t
 	return &crtc->planes[index];
 }
 
-static void write_to_buffer(struct gbm_bo *bo, uint32_t u32, uint16_t u16)
+static void write_to_buffer(struct bs_mapper *mapper, struct gbm_bo *bo, uint32_t u32, uint16_t u16)
 {
 	void *map_data;
-	uint32_t stride;
 	uint32_t num_ints;
 	uint32_t format = gbm_bo_get_format(bo);
-	void *addr = gbm_bo_map(bo, 0, 0, gbm_bo_get_width(bo), gbm_bo_get_height(bo), 0, &stride,
-				&map_data, 0);
+	void *addr = bs_mapper_map(mapper, bo, 0, &map_data);
 
 	if (format == GBM_FORMAT_RGB565 || format == GBM_FORMAT_BGR565) {
 		num_ints = gbm_bo_get_plane_size(bo, 0) / sizeof(uint16_t);
@@ -183,15 +181,13 @@ static void write_to_buffer(struct gbm_bo *bo, uint32_t u32, uint16_t u16)
 			pixel[i] = u32;
 	}
 
-	gbm_bo_unmap(bo, map_data);
+	bs_mapper_unmap(mapper, bo, map_data);
 }
 
-static void draw_cursor(struct gbm_bo *bo)
+static void draw_cursor(struct bs_mapper *mapper, struct gbm_bo *bo)
 {
 	void *map_data;
-	uint32_t stride;
-	uint32_t *cursor_ptr = gbm_bo_map(bo, 0, 0, gbm_bo_get_width(bo), gbm_bo_get_height(bo), 0,
-					  &stride, &map_data, 0);
+	uint32_t *cursor_ptr = bs_mapper_map(mapper, bo, 0, &map_data);
 	for (size_t y = 0; y < gbm_bo_get_height(bo); y++) {
 		for (size_t x = 0; x < gbm_bo_get_width(bo); x++) {
 			// A white triangle pointing right
@@ -201,7 +197,7 @@ static void draw_cursor(struct gbm_bo *bo)
 		}
 	}
 
-	gbm_bo_unmap(bo, map_data);
+	bs_mapper_unmap(mapper, bo, map_data);
 }
 
 static int get_prop(int fd, drmModeObjectPropertiesPtr props, const char *name,
@@ -411,7 +407,7 @@ static int pageflip(struct atomictest_context *ctx, struct atomictest_plane *pla
 
 	for (uint32_t i = 0; i < count_formats; i++) {
 		CHECK_RESULT(init_plane(ctx, plane, formats[i], x, y, w, h, zpos, crtc_id));
-		write_to_buffer(plane->bo, 0x00FF0000, 0xF800);
+		write_to_buffer(ctx->mapper, plane->bo, 0x00FF0000, 0xF800);
 		CHECK_RESULT(commit(ctx));
 		usleep(1e6);
 	}
@@ -507,7 +503,7 @@ static struct atomictest_context *new_context(uint32_t num_connectors, uint32_t 
 	ctx->drm_event_ctx.version = DRM_EVENT_CONTEXT_VERSION;
 	ctx->drm_event_ctx.page_flip_handler = page_flip_handler;
 
-	ctx->mapper = bs_mapper_dma_buf_new();
+	ctx->mapper = bs_mapper_gem_new();
 	if (ctx->mapper == NULL) {
 		bs_debug_error("failed to create mapper object");
 		free_context(ctx);
@@ -724,7 +720,7 @@ static int test_multiple_planes(struct atomictest_context *ctx, struct atomictes
 				added_video = true;
 				CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, x, y, x,
 							y, i, crtc->crtc_id));
-				write_to_buffer(overlay->bo, 0x00FF0000, 0);
+				write_to_buffer(ctx->mapper, overlay->bo, 0x00FF0000, 0);
 			}
 		}
 
@@ -734,13 +730,13 @@ static int test_multiple_planes(struct atomictest_context *ctx, struct atomictes
 			cursor = get_plane(crtc, j, DRM_PLANE_TYPE_CURSOR);
 			CHECK_RESULT(init_plane(ctx, cursor, DRM_FORMAT_XRGB8888, x, y, CURSOR_SIZE,
 						CURSOR_SIZE, crtc->num_overlay + j, crtc->crtc_id));
-			draw_cursor(cursor->bo);
+			draw_cursor(ctx->mapper, cursor->bo);
 		}
 
 		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
 		CHECK_RESULT(init_plane(ctx, primary, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
 					crtc->height, 0, crtc->crtc_id));
-		write_to_buffer(primary->bo, 0x00000FF, 0);
+		write_to_buffer(ctx->mapper, primary->bo, 0x00000FF, 0);
 
 		uint32_t num_planes = crtc->num_primary + crtc->num_cursor + crtc->num_overlay;
 		int done = 0;
@@ -826,14 +822,14 @@ static int test_disable_primary(struct atomictest_context *ctx, struct atomictes
 			uint32_t y = crtc->height >> (j + 2);
 			CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, x, y, x, y, i,
 						crtc->crtc_id));
-			write_to_buffer(overlay->bo, 0x00FF0000, 0);
+			write_to_buffer(ctx->mapper, overlay->bo, 0x00FF0000, 0);
 		}
 
 		cursor = drmModeAtomicGetCursor(ctx->pset);
 		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
 		CHECK_RESULT(init_plane(ctx, primary, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
 					crtc->height, 0, crtc->crtc_id));
-		write_to_buffer(primary->bo, 0x00000FF, 0);
+		write_to_buffer(ctx->mapper, primary->bo, 0x00000FF, 0);
 		CHECK_RESULT(commit(ctx));
 		usleep(1e6);
 
