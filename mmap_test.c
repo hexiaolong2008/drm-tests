@@ -9,6 +9,7 @@
 #include "bs_drm.h"
 
 #define BUFFERS 2
+#define NUM_FRAMES 0x100
 
 struct framebuffer {
 	struct gbm_bo *bo;
@@ -101,10 +102,12 @@ static void draw(struct context *ctx)
 
 	for (sequence_index = 0; sequence_index < 4; sequence_index++) {
 		show_sequence(sequences[sequence_index]);
-		for (int frame_index = 0; frame_index < 0x100; frame_index++) {
+		for (int frame_index = 0; frame_index < NUM_FRAMES; frame_index++) {
 			struct framebuffer *fb = &ctx->fbs[fb_idx];
 			size_t bo_stride = gbm_bo_get_plane_stride(fb->bo, 0);
 			size_t bo_size = gbm_bo_get_plane_size(fb->bo, 0);
+			const uint32_t width = gbm_bo_get_width(fb->bo);
+			const uint32_t height = gbm_bo_get_height(fb->bo);
 			uint32_t *bo_ptr;
 			volatile uint32_t *ptr;
 			void *map_data;
@@ -138,8 +141,8 @@ static void draw(struct context *ctx)
 							int x = ((void *)ptr - (void *)bo_ptr -
 								 bo_stride * y) /
 								sizeof(*ptr);
-							x -= 100;
-							y -= 100;
+							x -= frame_index * (width / NUM_FRAMES);
+							y -= frame_index * (height / NUM_FRAMES);
 							*ptr = 0xff000000;
 							if (x * x + y * y <
 							    frame_index * frame_index)
