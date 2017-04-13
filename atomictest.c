@@ -718,7 +718,7 @@ static int test_multiple_planes(struct atomictest_context *ctx, struct atomictes
 			x = crtc->width >> (j + 2);
 			y = crtc->height >> (j + 2);
 			cursor = get_plane(crtc, j, DRM_PLANE_TYPE_CURSOR);
-			CHECK_RESULT(init_plane(ctx, cursor, DRM_FORMAT_XRGB8888, x, y, CURSOR_SIZE,
+			CHECK_RESULT(init_plane(ctx, cursor, DRM_FORMAT_ARGB8888, x, y, CURSOR_SIZE,
 						CURSOR_SIZE, crtc->num_overlay + j, crtc->crtc_id));
 			draw_cursor(ctx->mapper, cursor->bo);
 		}
@@ -788,6 +788,7 @@ static int test_fullscreen_video(struct atomictest_context *ctx, struct atomicte
 			if (init_plane(ctx, primary, yuv_formats[j], 0, 0, crtc->width,
 				       crtc->height, 0, crtc->crtc_id))
 				continue;
+
 			const struct bs_draw_format *draw_format =
 			    bs_get_draw_format(yuv_formats[j]);
 			CHECK(draw_format);
