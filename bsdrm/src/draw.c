@@ -77,12 +77,11 @@ static const struct bs_draw_format bs_draw_formats[] = {
 	},
 	{
 	    PIXEL_FORMAT_AND_NAME(YUYV),
-	    4,
+	    3,
 	    {
-		{ { 0.43921484375f, -0.3677890625f, -0.07142578125f }, 128.0f, 1, 1, 4, 0, 0 },
-		{ { 0.2567890625f, 0.50412890625f, 0.09790625f }, 16.0f, 1, 1, 4, 0, 1 },
-		{ { -0.14822265625f, -0.2909921875f, 0.43921484375f }, 128.0f, 1, 1, 4, 0, 2 },
-		{ { 0.2567890625f, 0.50412890625f, 0.09790625f }, 16.0f, 1, 1, 4, 0, 3 },
+		{ { 0.2567890625f, 0.50412890625f, 0.09790625f }, 16.0f, 1, 1, 2, 0, 0 },
+		{ { -0.14822265625f, -0.2909921875f, 0.43921484375f }, 128.0f, 2, 1, 4, 0, 1 },
+		{ { 0.43921484375f, -0.3677890625f, -0.07142578125f }, 128.0f, 2, 1, 4, 0, 3 },
 	    },
 	},
 };
@@ -138,42 +137,68 @@ static bool draw_color(struct bs_mapper *mapper, struct gbm_bo *bo,
 		       const struct bs_draw_format *format, struct draw_data *data,
 		       compute_color_t compute_color_fn)
 {
-	data->w = gbm_bo_get_width(bo);
-	data->h = gbm_bo_get_height(bo);
-
+	uint8_t *ptr, *converted_colors[MAX_COMPONENTS];
 	struct draw_plane planes[GBM_MAX_PLANES];
+	uint32_t height = data->h = gbm_bo_get_height(bo);
+	uint32_t width = data->w = gbm_bo_get_width(bo);
+
 	size_t num_planes = mmap_planes(mapper, bo, planes);
 	if (num_planes == 0) {
 		bs_debug_error("failed to prepare to draw pattern to buffer object");
 		return false;
 	}
 
-	for (uint32_t y = 0; y < data->h; y++) {
-		uint8_t *rows[MAX_COMPONENTS] = { 0 };
-		for (size_t comp_index = 0; comp_index < format->component_count; comp_index++) {
-			const struct draw_format_component *comp = &format->components[comp_index];
-			struct draw_plane *plane = &planes[comp->plane_index];
-			rows[comp_index] = plane->ptr + comp->plane_offset +
-					   plane->row_stride * (y / comp->vertical_subsample_rate);
-		}
+	for (size_t comp_index = 0; comp_index < format->component_count; comp_index++) {
+		converted_colors[comp_index] = calloc(width * height, sizeof(uint8_t));
+		assert(converted_colors[comp_index]);
+	}
+
+	for (uint32_t y = 0; y < height; y++) {
 		data->y = y;
-		for (uint32_t x = 0; x < data->w; x++) {
+		for (uint32_t x = 0; x < width; x++) {
 			data->x = x;
 			compute_color_fn(data);
 			for (size_t comp_index = 0; comp_index < format->component_count;
 			     comp_index++) {
 				const struct draw_format_component *comp =
 				    &format->components[comp_index];
-				if ((y % comp->vertical_subsample_rate) == 0 &&
-				    (x % comp->horizontal_subsample_rate) == 0)
-					*(rows[comp_index] + x * comp->pixel_skip) =
-					    convert_color(comp, data->out_color[2],
-							  data->out_color[1], data->out_color[0]);
+				ptr = converted_colors[comp_index] + width * y + x;
+				*ptr = convert_color(comp, data->out_color[2], data->out_color[1],
+						     data->out_color[0]);
+			}
+		}
+	}
+
+	uint32_t color, samples, offset;
+	uint8_t *rows[MAX_COMPONENTS] = { 0 };
+	for (size_t comp_index = 0; comp_index < format->component_count; comp_index++) {
+		const struct draw_format_component *comp = &format->components[comp_index];
+		struct draw_plane *plane = &planes[comp->plane_index];
+		for (uint32_t y = 0; y < height / comp->vertical_subsample_rate; y++) {
+			rows[comp_index] = plane->ptr + comp->plane_offset + plane->row_stride * y;
+			for (uint32_t x = 0; x < width / comp->horizontal_subsample_rate; x++) {
+				offset = color = samples = 0;
+				for (uint32_t j = 0; j < comp->vertical_subsample_rate; j++) {
+					offset = (y * comp->vertical_subsample_rate + j) * width +
+						 x * comp->horizontal_subsample_rate;
+					for (uint32_t i = 0; i < comp->horizontal_subsample_rate;
+					     i++) {
+						color += converted_colors[comp_index][offset];
+						samples++;
+						offset++;
+					}
+				}
+
+				*(rows[comp_index] + x * comp->pixel_skip) = color / samples;
 			}
 		}
 	}
 
 	unmmap_planes(mapper, bo, num_planes, planes);
+	for (size_t comp_index = 0; comp_index < format->component_count; comp_index++) {
+		free(converted_colors[comp_index]);
+	}
+
 	return true;
 }
 
