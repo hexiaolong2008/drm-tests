@@ -228,6 +228,8 @@ int main(int argc, char **argv)
 					  1,
 					  EGL_RENDERABLE_TYPE,
 					  EGL_OPENGL_ES2_BIT,
+					  EGL_SURFACE_TYPE,
+					  EGL_DONT_CARE,
 					  EGL_NONE };
 	const EGLint context_attribs[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
 
