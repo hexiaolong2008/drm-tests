@@ -488,7 +488,6 @@ static struct atomictest_context *new_context(uint32_t num_connectors, uint32_t 
 	struct atomictest_context *ctx = calloc(1, sizeof(*ctx));
 	ctx->connectors = calloc(num_connectors, sizeof(*ctx->connectors));
 	ctx->crtcs = calloc(num_crtcs, sizeof(*ctx->crtcs));
-	ctx->modes = calloc(1, sizeof(*ctx->modes));
 	for (uint32_t i = 0; i < num_crtcs; i++) {
 		ctx->crtcs[i].planes = calloc(num_planes, sizeof(*ctx->crtcs[i].planes));
 		ctx->crtcs[i].overlay_idx = calloc(num_planes, sizeof(uint32_t));
@@ -498,7 +497,8 @@ static struct atomictest_context *new_context(uint32_t num_connectors, uint32_t 
 
 	ctx->num_connectors = num_connectors;
 	ctx->num_crtcs = num_crtcs;
-	ctx->num_modes = 1;
+	ctx->num_modes = 0;
+	ctx->modes = NULL;
 	ctx->pset = drmModeAtomicAlloc();
 	ctx->drm_event_ctx.version = DRM_EVENT_CONTEXT_VERSION;
 	ctx->drm_event_ctx.page_flip_handler = page_flip_handler;
@@ -537,7 +537,6 @@ static struct atomictest_context *init_atomictest(int fd)
 		return NULL;
 	}
 
-	ctx->num_modes = 0;
 	ctx->fd = fd;
 	drmModeObjectPropertiesPtr props = NULL;
 
@@ -549,13 +548,13 @@ static struct atomictest_context *init_atomictest(int fd)
 
 		drmModeConnector *connector = drmModeGetConnector(fd, conn_id);
 		for (uint32_t mode_index = 0; mode_index < connector->count_modes; mode_index++) {
+			ctx->modes = realloc(ctx->modes, (ctx->num_modes + 1) * sizeof(*ctx->modes));
 			drmModeCreatePropertyBlob(fd, &connector->modes[mode_index],
 						  sizeof(drmModeModeInfo),
 						  &ctx->modes[ctx->num_modes].id);
 			ctx->modes[ctx->num_modes].width = connector->modes[mode_index].hdisplay;
 			ctx->modes[ctx->num_modes].height = connector->modes[mode_index].vdisplay;
 			ctx->num_modes++;
-			ctx->modes = realloc(ctx->modes, ctx->num_modes * sizeof(*ctx->modes));
 		}
 
 		drmModeFreeConnector(connector);
