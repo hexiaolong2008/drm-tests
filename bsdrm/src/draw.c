@@ -12,7 +12,7 @@ struct draw_format_component {
 	float value_offset;
 	uint32_t horizontal_subsample_rate;
 	uint32_t vertical_subsample_rate;
-	uint32_t pixel_skip;
+	uint32_t byte_skip;
 	uint32_t plane_index;
 	uint32_t plane_offset;
 };
@@ -43,8 +43,8 @@ static const struct bs_draw_format bs_draw_formats[] = {
 	    3,
 	    {
 		{ { 0.2567890625f, 0.50412890625f, 0.09790625f }, 16.0f, 1, 1, 1, 0, 0 },
-		{ { -0.14822265625f, -0.2909921875f, 0.43921484375f }, 128.0f, 2, 2, 1, 1, 0 },
-		{ { 0.43921484375f, -0.3677890625f, -0.07142578125f }, 128.0f, 2, 2, 1, 1, 1 },
+		{ { -0.14822265625f, -0.2909921875f, 0.43921484375f }, 128.0f, 2, 2, 2, 1, 0 },
+		{ { 0.43921484375f, -0.3677890625f, -0.07142578125f }, 128.0f, 2, 2, 2, 1, 1 },
 	    },
 	},
 	{
@@ -198,7 +198,7 @@ static bool draw_color(struct bs_mapper *mapper, struct gbm_bo *bo,
 					}
 				}
 
-				*(rows[comp_index] + x * comp->pixel_skip) = color / samples;
+				*(rows[comp_index] + x * comp->byte_skip) = color / samples;
 			}
 		}
 	}
