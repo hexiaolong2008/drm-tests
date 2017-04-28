@@ -36,7 +36,7 @@
 #define CURSOR_SIZE 64
 
 static const uint32_t yuv_formats[] = {
-	DRM_FORMAT_MT21, DRM_FORMAT_NV12, DRM_FORMAT_YUYV, DRM_FORMAT_YVU420,
+	DRM_FORMAT_NV12, DRM_FORMAT_UYVY, DRM_FORMAT_YUYV, DRM_FORMAT_YVU420,
 };
 
 static struct gbm_device *gbm = NULL;
