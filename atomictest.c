@@ -576,7 +576,7 @@ static struct atomictest_context *init_atomictest(int fd)
 	uint32_t overlay_idx, primary_idx, cursor_idx, idx;
 
 	for (uint32_t plane_index = 0; plane_index < plane_res->count_planes; plane_index++) {
-		drmModePlane *plane = drmModeGetPlane(fd, plane_res->planes[plane_index]);
+		drmModePlane *plane = drmModeGetPlane2(fd, plane_res->planes[plane_index]);
 		if (plane == NULL) {
 			bs_debug_error("failed to get plane id %u", plane_res->planes[plane_index]);
 			continue;
