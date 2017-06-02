@@ -409,21 +409,44 @@ static int pageflip(struct atomictest_context *ctx, struct atomictest_plane *pla
 	return 0;
 }
 
-static int check_mode(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
+static uint32_t get_connection(struct atomictest_crtc *crtc, uint32_t crtc_index)
+{
+	uint32_t connector_id = 0;
+	uint32_t crtc_mask = 1u << crtc_index;
+	struct bs_drm_pipe pipe = { 0 };
+	struct bs_drm_pipe_plumber *plumber = bs_drm_pipe_plumber_new();
+	bs_drm_pipe_plumber_crtc_mask(plumber, crtc_mask);
+	if (bs_drm_pipe_plumber_make(plumber, &pipe))
+		connector_id = pipe.connector_id;
+
+	bs_drm_pipe_plumber_destroy(&plumber);
+	return connector_id;
+}
+
+static int enable_crtc(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
 {
 	drmModeAtomicSetCursor(ctx->pset, 0);
 
-	for (uint32_t i = 0; i < ctx->num_crtcs; i++) {
-		if (&ctx->crtcs[i] != crtc) {
-			ctx->crtcs[i].mode_id.value = 0;
-			ctx->crtcs[i].active.value = 0;
-			set_crtc_props(&ctx->crtcs[i], ctx->pset);
-		}
+	for (uint32_t i = 0; i < ctx->num_connectors; i++) {
+		ctx->connectors[i].crtc_id.value = 0;
+		set_connector_props(&ctx->connectors[i], ctx->pset);
+
 	}
 
-	for (uint32_t i = 0; i < ctx->num_connectors; i++) {
-		ctx->connectors[i].crtc_id.value = crtc->crtc_id;
-		set_connector_props(&ctx->connectors[i], ctx->pset);
+	for (uint32_t i = 0; i < ctx->num_crtcs; i++) {
+		if (&ctx->crtcs[i] == crtc) {
+			uint32_t connector_id = get_connection(crtc, i);
+			CHECK(connector_id);
+			for (uint32_t j = 0; j < ctx->num_connectors; j++) {
+				if (connector_id == ctx->connectors[j].connector_id) {
+					ctx->connectors[j].crtc_id.value = crtc->crtc_id;
+					set_connector_props(&ctx->connectors[j], ctx->pset);
+					break;
+				}
+			}
+
+			break;
+		}
 	}
 
 	int ret = -EINVAL;
@@ -447,6 +470,21 @@ static int check_mode(struct atomictest_context *ctx, struct atomictest_crtc *cr
 	}
 
 	bs_debug_error("[CRTC:%d]: failed to find mode", crtc->crtc_id);
+	return ret;
+}
+
+static int disable_crtc(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
+{
+	for (uint32_t i = 0; i < ctx->num_connectors; i++) {
+		ctx->connectors[i].crtc_id.value = 0;
+		set_connector_props(&ctx->connectors[i], ctx->pset);
+	}
+
+	crtc->mode_id.value = 0;
+	crtc->active.value = 0;
+	set_crtc_props(crtc, ctx->pset);
+	int ret = drmModeAtomicCommit(ctx->fd, ctx->pset, DRM_MODE_ATOMIC_ALLOW_MODESET, NULL);
+	CHECK_RESULT(ret);
 	return ret;
 }
 
@@ -659,14 +697,21 @@ static int run_atomictest(const struct atomictest *test)
 	struct atomictest_crtc *crtc;
 	for (uint32_t crtc_index = 0; crtc_index < ctx->num_crtcs; crtc_index++) {
 		crtc = &ctx->crtcs[crtc_index];
-		if (!check_mode(ctx, crtc))
-			ret |= test->run_test(ctx, crtc);
-		else
-			ret |= 1;
+		ret = enable_crtc(ctx, crtc);
+		if (ret)
+			goto out;
+
+		ret = test->run_test(ctx, crtc);
+		if (ret)
+			goto out;
+
+		ret = disable_crtc(ctx, crtc);
+		if (ret)
+			goto out;
 	}
 
+out:
 	free_context(ctx);
-
 destroy_gbm_device:
 	gbm_device_destroy(gbm);
 destroy_fd:
