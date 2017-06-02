@@ -226,6 +226,7 @@ static int get_prop(int fd, drmModeObjectPropertiesPtr props, const char *name,
 static int get_connector_props(int fd, struct atomictest_connector *connector,
 			       drmModeObjectPropertiesPtr props)
 {
+	CHECK_RESULT(get_prop(fd, props, "CRTC_ID", &connector->crtc_id));
 	CHECK_RESULT(get_prop(fd, props, "EDID", &connector->edid));
 	CHECK_RESULT(get_prop(fd, props, "DPMS", &connector->dpms));
 	return 0;
@@ -257,13 +258,6 @@ static int get_plane_props(int fd, struct atomictest_plane *plane, drmModeObject
 int set_connector_props(struct atomictest_connector *conn, drmModeAtomicReqPtr pset)
 {
 	uint32_t id = conn->connector_id;
-
-	/*
-	 * Currently, kernel v4.4 doesn't have CRTC_ID as a property of the connector. It's
-	 * required for the modeset to work, so we currently just take it from a plane. Also
-	 * setting EDID or DPMS (even w/o modification) makes the kernel return -EINVAL, so
-	 * let's keep them unset for now.
-	 */
 	CHECK_RESULT(drmModeAtomicAddProperty(pset, id, conn->crtc_id.pid, conn->crtc_id.value));
 	return 0;
 }
@@ -622,10 +616,6 @@ static struct atomictest_context *query_kms(int fd)
 		drmModeFreeObjectProperties(props);
 		props = NULL;
 	}
-
-	/* HACK: Set connector CRTC pid to plane CRTC pid. */
-	for (uint32_t i = 0; i < ctx->num_connectors; i++)
-		ctx->connectors[i].crtc_id.pid = ctx->crtcs[0].planes[0].crtc_id.pid;
 
 	drmModeFreePlaneResources(plane_res);
 	drmModeFreeResources(res);
