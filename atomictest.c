@@ -456,6 +456,38 @@ static int check_mode(struct atomictest_context *ctx, struct atomictest_crtc *cr
 	return ret;
 }
 
+static struct atomictest_context *new_context(uint32_t num_connectors, uint32_t num_crtcs,
+					      uint32_t num_planes)
+{
+	struct atomictest_context *ctx = calloc(1, sizeof(*ctx));
+
+	ctx->mapper = bs_mapper_gem_new();
+	if (ctx->mapper == NULL) {
+		bs_debug_error("failed to create mapper object");
+		free(ctx);
+		return NULL;
+	}
+
+	ctx->connectors = calloc(num_connectors, sizeof(*ctx->connectors));
+	ctx->crtcs = calloc(num_crtcs, sizeof(*ctx->crtcs));
+	for (uint32_t i = 0; i < num_crtcs; i++) {
+		ctx->crtcs[i].planes = calloc(num_planes, sizeof(*ctx->crtcs[i].planes));
+		ctx->crtcs[i].overlay_idx = calloc(num_planes, sizeof(uint32_t));
+		ctx->crtcs[i].primary_idx = calloc(num_planes, sizeof(uint32_t));
+		ctx->crtcs[i].cursor_idx = calloc(num_planes, sizeof(uint32_t));
+	}
+
+	ctx->num_connectors = num_connectors;
+	ctx->num_crtcs = num_crtcs;
+	ctx->num_modes = 0;
+	ctx->modes = NULL;
+	ctx->pset = drmModeAtomicAlloc();
+	ctx->drm_event_ctx.version = DRM_EVENT_CONTEXT_VERSION;
+	ctx->drm_event_ctx.page_flip_handler = page_flip_handler;
+
+	return ctx;
+}
+
 static void free_context(struct atomictest_context *ctx)
 {
 	for (uint32_t i = 0; i < ctx->num_crtcs; i++) {
@@ -480,37 +512,6 @@ static void free_context(struct atomictest_context *ctx)
 	free(ctx->connectors);
 	bs_mapper_destroy(ctx->mapper);
 	free(ctx);
-}
-
-static struct atomictest_context *new_context(uint32_t num_connectors, uint32_t num_crtcs,
-					      uint32_t num_planes)
-{
-	struct atomictest_context *ctx = calloc(1, sizeof(*ctx));
-	ctx->connectors = calloc(num_connectors, sizeof(*ctx->connectors));
-	ctx->crtcs = calloc(num_crtcs, sizeof(*ctx->crtcs));
-	for (uint32_t i = 0; i < num_crtcs; i++) {
-		ctx->crtcs[i].planes = calloc(num_planes, sizeof(*ctx->crtcs[i].planes));
-		ctx->crtcs[i].overlay_idx = calloc(num_planes, sizeof(uint32_t));
-		ctx->crtcs[i].primary_idx = calloc(num_planes, sizeof(uint32_t));
-		ctx->crtcs[i].cursor_idx = calloc(num_planes, sizeof(uint32_t));
-	}
-
-	ctx->num_connectors = num_connectors;
-	ctx->num_crtcs = num_crtcs;
-	ctx->num_modes = 0;
-	ctx->modes = NULL;
-	ctx->pset = drmModeAtomicAlloc();
-	ctx->drm_event_ctx.version = DRM_EVENT_CONTEXT_VERSION;
-	ctx->drm_event_ctx.page_flip_handler = page_flip_handler;
-
-	ctx->mapper = bs_mapper_gem_new();
-	if (ctx->mapper == NULL) {
-		bs_debug_error("failed to create mapper object");
-		free_context(ctx);
-		return NULL;
-	}
-
-	return ctx;
 }
 
 static struct atomictest_context *init_atomictest(int fd)
