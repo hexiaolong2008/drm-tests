@@ -193,7 +193,7 @@ static void draw_cursor(struct bs_mapper *mapper, struct gbm_bo *bo)
 			// A white triangle pointing right
 			bool color_white = y > x / 2 && y < (gbm_bo_get_width(bo) - x / 2);
 			cursor_ptr[y * gbm_bo_get_height(bo) + x] =
-			    (color_white) ? 0xFFFFFFFF : 0x00000000;
+			    color_white ? 0xFFFFFFFF : 0x00000000;
 		}
 	}
 
@@ -514,7 +514,7 @@ static void free_context(struct atomictest_context *ctx)
 	free(ctx);
 }
 
-static struct atomictest_context *init_atomictest(int fd)
+static struct atomictest_context *query_kms(int fd)
 {
 	drmModeRes *res = drmModeGetResources(fd);
 	if (res == NULL) {
@@ -659,9 +659,9 @@ static int run_atomictest(const struct atomictest *test)
 		goto destroy_gbm_device;
 	}
 
-	struct atomictest_context *ctx = init_atomictest(fd);
+	struct atomictest_context *ctx = query_kms(fd);
 	if (!ctx) {
-		bs_debug_error("initializing atomictest failed.");
+		bs_debug_error("querying atomictest failed.");
 		ret = 1;
 		goto destroy_gbm_device;
 	}
