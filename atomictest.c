@@ -15,6 +15,8 @@
  * atomictest
  */
 
+#include <getopt.h>
+
 #include "bs_drm.h"
 
 #define CHECK(cond)                                               \
@@ -882,7 +884,7 @@ static int run_testcase(struct atomictest_context *ctx, struct atomictest_crtc *
 	return ret;
 }
 
-static int run_atomictest(const char *name)
+static int run_atomictest(const char *name, uint32_t crtc_mask)
 {
 	int ret = 0;
 	uint32_t num_run = 0;
@@ -920,6 +922,9 @@ static int run_atomictest(const char *name)
 	struct atomictest_crtc *crtc;
 	for (uint32_t crtc_index = 0; crtc_index < ctx->num_crtcs; crtc_index++) {
 		crtc = &ctx->crtcs[crtc_index];
+		if (!((1 << crtc_index) & crtc_mask))
+			continue;
+
 		for (uint32_t i = 0; i < BS_ARRAY_LEN(cases); i++) {
 			if (strcmp(cases[i].name, name) && strcmp("all", name))
 				continue;
@@ -951,9 +956,15 @@ destroy_fd:
 	return ret;
 }
 
+static const struct option longopts[] = {
+	{ "crtc", required_argument, NULL, 'c' },
+	{ "test_name", required_argument, NULL, 't' },
+	{ 0, 0, 0, 0 },
+};
+
 static void print_help(const char *argv0)
 {
-	printf("usage: %s <test_name>\n", argv0);
+	printf("usage: %s -t <test_name> -c <crtc_index>\n", argv0);
 	printf("A valid name test is one the following:\n");
 	for (uint32_t i = 0; i < BS_ARRAY_LEN(cases); i++)
 		printf("%s\n", cases[i].name);
@@ -962,18 +973,42 @@ static void print_help(const char *argv0)
 
 int main(int argc, char **argv)
 {
-	if (argc == 2) {
-		char *name = argv[1];
-		int ret = run_atomictest(name);
-		if (ret == 0) {
-			printf("[  PASSED  ] atomictest.%s\n", name);
-			return 0;
-		} else if (ret < 0) {
-			printf("[  FAILED  ] atomictest.%s\n", name);
-			return -1;
+	int c;
+	char *name = NULL;
+	int32_t crtc_idx = -1;
+	uint32_t crtc_mask = ~0;
+	while ((c = getopt_long(argc, argv, "c:t:", longopts, NULL)) != -1) {
+		switch (c) {
+			case 'c':
+				if (sscanf(optarg, "%d", &crtc_idx) != 1)
+					goto print;
+				break;
+			case 't':
+				if (name) {
+					free(name);
+					name = NULL;
+				}
+
+				name = strdup(optarg);
+				break;
+			default:
+				goto print;
 		}
 	}
 
+	if (crtc_idx >= 0)
+		crtc_mask = 1 << crtc_idx;
+
+	int ret = run_atomictest(name, crtc_mask);
+	if (ret == 0) {
+		printf("[  PASSED  ] atomictest.%s\n", name);
+		return 0;
+	} else if (ret < 0) {
+		printf("[  FAILED  ] atomictest.%s\n", name);
+		return -1;
+	}
+
+print:
 	print_help(argv[0]);
-	return -1;
+	return 0;
 }
