@@ -117,9 +117,11 @@ struct atomictest_context {
 	struct bs_mapper *mapper;
 };
 
-struct atomictest {
+typedef int (*test_function)(struct atomictest_context *ctx, struct atomictest_crtc *crtc);
+
+struct atomictest_testcase {
 	const char *name;
-	int (*run_test)(struct atomictest_context *ctx, struct atomictest_crtc *crtc);
+	test_function test_func;
 };
 
 static int32_t get_format_idx(struct atomictest_plane *plane, uint32_t format)
@@ -660,65 +662,6 @@ static struct atomictest_context *query_kms(int fd)
 	return ctx;
 }
 
-static int run_atomictest(const struct atomictest *test)
-{
-	int ret = 0;
-	int fd = bs_drm_open_main_display();
-	CHECK_RESULT(fd);
-
-	gbm = gbm_create_device(fd);
-	if (!gbm) {
-		bs_debug_error("failed to create gbm device");
-		ret = 1;
-		goto destroy_fd;
-	}
-
-	ret = drmSetClientCap(fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
-	if (ret) {
-		bs_debug_error("failed to enable DRM_CLIENT_CAP_UNIVERSAL_PLANES");
-		ret = 1;
-		goto destroy_gbm_device;
-	}
-
-	ret = drmSetClientCap(fd, DRM_CLIENT_CAP_ATOMIC, 1);
-	if (ret) {
-		bs_debug_error("failed to enable DRM_CLIENT_CAP_ATOMIC");
-		ret = 1;
-		goto destroy_gbm_device;
-	}
-
-	struct atomictest_context *ctx = query_kms(fd);
-	if (!ctx) {
-		bs_debug_error("querying atomictest failed.");
-		ret = 1;
-		goto destroy_gbm_device;
-	}
-
-	struct atomictest_crtc *crtc;
-	for (uint32_t crtc_index = 0; crtc_index < ctx->num_crtcs; crtc_index++) {
-		crtc = &ctx->crtcs[crtc_index];
-		ret = enable_crtc(ctx, crtc);
-		if (ret)
-			goto out;
-
-		ret = test->run_test(ctx, crtc);
-		if (ret)
-			goto out;
-
-		ret = disable_crtc(ctx, crtc);
-		if (ret)
-			goto out;
-	}
-
-out:
-	free_context(ctx);
-destroy_gbm_device:
-	gbm_device_destroy(gbm);
-destroy_fd:
-	close(fd);
-
-	return ret;
-}
 
 static int test_multiple_planes(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
 {
@@ -912,7 +855,7 @@ static int test_primary_pageflip(struct atomictest_context *ctx, struct atomicte
 	return 0;
 }
 
-static const struct atomictest tests[] = {
+static const struct atomictest_testcase cases[] = {
 	{ "disable_primary", test_disable_primary },
 	{ "fullscreen_video", test_fullscreen_video },
 	{ "multiple_planes", test_multiple_planes },
@@ -921,34 +864,116 @@ static const struct atomictest tests[] = {
 	{ "video_overlay", test_video_overlay },
 };
 
+static int run_testcase(struct atomictest_context *ctx, struct atomictest_crtc *crtc,
+			test_function func)
+{
+	int cursor = drmModeAtomicGetCursor(ctx->pset);
+	uint32_t num_planes = crtc->num_primary + crtc->num_cursor + crtc->num_overlay;
+
+	int ret = func(ctx, crtc);
+
+	for (uint32_t i = 0; i < num_planes; i++)
+		disable_plane(ctx, &crtc->planes[i]);
+
+	CHECK_RESULT(commit(ctx));
+	usleep(1e6 / 60);
+
+	drmModeAtomicSetCursor(ctx->pset, cursor);
+	return ret;
+}
+
+static int run_atomictest(const char *name)
+{
+	int ret = 0;
+	uint32_t num_run = 0;
+	int fd = bs_drm_open_main_display();
+	CHECK_RESULT(fd);
+
+	gbm = gbm_create_device(fd);
+	if (!gbm) {
+		bs_debug_error("failed to create gbm device");
+		ret = -1;
+		goto destroy_fd;
+	}
+
+	ret = drmSetClientCap(fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
+	if (ret) {
+		bs_debug_error("failed to enable DRM_CLIENT_CAP_UNIVERSAL_PLANES");
+		ret = -1;
+		goto destroy_gbm_device;
+	}
+
+	ret = drmSetClientCap(fd, DRM_CLIENT_CAP_ATOMIC, 1);
+	if (ret) {
+		bs_debug_error("failed to enable DRM_CLIENT_CAP_ATOMIC");
+		ret = -1;
+		goto destroy_gbm_device;
+	}
+
+	struct atomictest_context *ctx = query_kms(fd);
+	if (!ctx) {
+		bs_debug_error("querying atomictest failed.");
+		ret = -1;
+		goto destroy_gbm_device;
+	}
+
+	struct atomictest_crtc *crtc;
+	for (uint32_t crtc_index = 0; crtc_index < ctx->num_crtcs; crtc_index++) {
+		crtc = &ctx->crtcs[crtc_index];
+		for (uint32_t i = 0; i < BS_ARRAY_LEN(cases); i++) {
+			if (strcmp(cases[i].name, name) && strcmp("all", name))
+				continue;
+
+			num_run++;
+			ret = enable_crtc(ctx, crtc);
+			if (ret)
+				goto out;
+
+			ret = run_testcase(ctx, crtc, cases[i].test_func);
+			if (ret)
+				goto out;
+
+			ret = disable_crtc(ctx, crtc);
+			if (ret)
+				goto out;
+		}
+	}
+
+	ret = (num_run == 0);
+
+out:
+	free_context(ctx);
+destroy_gbm_device:
+	gbm_device_destroy(gbm);
+destroy_fd:
+	close(fd);
+
+	return ret;
+}
+
 static void print_help(const char *argv0)
 {
-	printf("usage: %s <test_name>\n\n", argv0);
+	printf("usage: %s <test_name>\n", argv0);
 	printf("A valid name test is one the following:\n");
-	for (uint32_t i = 0; i < BS_ARRAY_LEN(tests); i++)
-		printf("%s\n", tests[i].name);
+	for (uint32_t i = 0; i < BS_ARRAY_LEN(cases); i++)
+		printf("%s\n", cases[i].name);
+	printf("all\n");
 }
 
 int main(int argc, char **argv)
 {
 	if (argc == 2) {
 		char *name = argv[1];
-		for (uint32_t i = 0; i < BS_ARRAY_LEN(tests); i++) {
-			if (strcmp(tests[i].name, name))
-				continue;
-
-			int ret = run_atomictest(&tests[i]);
-			if (ret) {
-				printf("[  FAILED  ] atomictest.%s\n", name);
-				return -1;
-			} else {
-				printf("[  PASSED  ] atomictest.%s\n", name);
-				return 0;
-			}
+		int ret = run_atomictest(name);
+		if (ret == 0) {
+			printf("[  PASSED  ] atomictest.%s\n", name);
+			return 0;
+		} else if (ret < 0) {
+			printf("[  FAILED  ] atomictest.%s\n", name);
+			return -1;
 		}
 	}
 
 	print_help(argv[0]);
-
 	return -1;
 }
