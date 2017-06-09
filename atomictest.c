@@ -996,17 +996,24 @@ int main(int argc, char **argv)
 		}
 	}
 
+	if (!name)
+		goto print;
+
 	if (crtc_idx >= 0)
 		crtc_mask = 1 << crtc_idx;
 
 	int ret = run_atomictest(name, crtc_mask);
-	if (ret == 0) {
+	if (ret == 0)
 		printf("[  PASSED  ] atomictest.%s\n", name);
-		return 0;
-	} else if (ret < 0) {
+	else if (ret < 0)
 		printf("[  FAILED  ] atomictest.%s\n", name);
-		return -1;
-	}
+
+	free(name);
+
+	if (ret > 0)
+		goto print;
+
+	return ret;
 
 print:
 	print_help(argv[0]);
