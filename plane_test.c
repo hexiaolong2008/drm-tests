@@ -226,7 +226,6 @@ static bool update_test_plane(int step, int32_t max_x, int32_t max_y, struct tes
 		}
 		needs_set = true;
 	}
-
 	return needs_set;
 }
 
@@ -418,7 +417,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	struct bs_mapper *mapper = bs_mapper_dma_buf_new();
+	struct bs_mapper *mapper = bs_mapper_gem_new();
 	if (mapper == NULL) {
 		bs_debug_error("failed to create mapper object");
 		return 1;
@@ -430,7 +429,7 @@ int main(int argc, char **argv)
 		bs_debug_error("failed to mmap background buffer object");
 		return 1;
 	}
-	memset(bo_ptr, 0xff, gbm_bo_get_height(bg_bo) * gbm_bo_get_stride(bg_bo));
+	memset(bo_ptr, 0, gbm_bo_get_height(bg_bo) * gbm_bo_get_stride(bg_bo));
 	bs_mapper_unmap(mapper, bg_bo, map_data);
 
 	uint32_t crtc_fb_id = bs_drm_fb_create_gbm(bg_bo);
@@ -544,7 +543,6 @@ int main(int argc, char **argv)
 				return 1;
 			}
 		}
-
 		usleep(1000000 / 60);
 	}
 
