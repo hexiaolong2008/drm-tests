@@ -434,7 +434,6 @@ static int enable_crtc(struct atomictest_context *ctx, struct atomictest_crtc *c
 	for (uint32_t i = 0; i < ctx->num_connectors; i++) {
 		ctx->connectors[i].crtc_id.value = 0;
 		set_connector_props(&ctx->connectors[i], ctx->pset);
-
 	}
 
 	for (uint32_t i = 0; i < ctx->num_crtcs; i++) {
@@ -585,7 +584,8 @@ static struct atomictest_context *query_kms(int fd)
 
 		drmModeConnector *connector = drmModeGetConnector(fd, conn_id);
 		for (uint32_t mode_index = 0; mode_index < connector->count_modes; mode_index++) {
-			ctx->modes = realloc(ctx->modes, (ctx->num_modes + 1) * sizeof(*ctx->modes));
+			ctx->modes =
+			    realloc(ctx->modes, (ctx->num_modes + 1) * sizeof(*ctx->modes));
 			drmModeCreatePropertyBlob(fd, &connector->modes[mode_index],
 						  sizeof(drmModeModeInfo),
 						  &ctx->modes[ctx->num_modes].id);
@@ -664,7 +664,6 @@ static struct atomictest_context *query_kms(int fd)
 	return ctx;
 }
 
-
 static int test_multiple_planes(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
 {
 	struct atomictest_plane *primary, *overlay, *cursor;
@@ -675,6 +674,10 @@ static int test_multiple_planes(struct atomictest_context *ctx, struct atomictes
 			overlay = get_plane(crtc, j, DRM_PLANE_TYPE_OVERLAY);
 			x = crtc->width >> (j + 2);
 			y = crtc->height >> (j + 2);
+			// drmModeAddFB2 requires the height and width are even for sub-sampled YUV
+			// formats.
+			x = BS_ALIGN(x, 2);
+			y = BS_ALIGN(y, 2);
 			bool added_video = false;
 			if (!has_video) {
 				uint32_t k = 0;

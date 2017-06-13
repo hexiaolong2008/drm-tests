@@ -35,6 +35,8 @@
 
 #define BS_ARRAY_LEN(a) (sizeof(a) / sizeof((a)[0]))
 
+#define BS_ALIGN(a, alignment) ((a + (alignment - 1)) & ~(alignment - 1))
+
 // debug.c
 __attribute__((format(printf, 5, 6))) void bs_debug_print(const char *prefix, const char *func,
 							  const char *file, int line,
