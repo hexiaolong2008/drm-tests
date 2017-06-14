@@ -249,7 +249,7 @@ int main(int argc, char **argv)
 	struct offscreen_buffer buffer;
 	buffer.draw_format = bs_get_draw_format_from_name("ARGB8888");
 	struct bs_mapper *mapper = NULL;
-	uint32_t flags = GBM_BO_USE_RENDERING | GBM_BO_USE_LINEAR;
+	uint32_t flags = GBM_BO_USE_TEXTURING | GBM_BO_USE_LINEAR;
 
 	int c;
 	while ((c = getopt_long(argc, argv, "f:bgdth", longopts, NULL)) != -1) {
@@ -273,7 +273,7 @@ int main(int argc, char **argv)
 				printf("using dumb map\n");
 				break;
 			case 't':
-				flags = GBM_BO_USE_RENDERING;
+				flags = GBM_BO_USE_TEXTURING;
 				break;
 			case 'h':
 			default:
