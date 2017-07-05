@@ -89,7 +89,8 @@ static void *gem_map(struct bs_mapper *mapper, struct gbm_bo *bo, size_t plane,
 	uint32_t w = gbm_bo_get_width(bo);
 	uint32_t h = gbm_bo_get_height(bo);
 	uint32_t stride;
-	void *ptr = gbm_bo_map(bo, 0, 0, w, h, 0, &stride, &info->map_data, plane);
+	void *ptr =
+	    gbm_bo_map(bo, 0, 0, w, h, GBM_BO_TRANSFER_READ_WRITE, &stride, &info->map_data, plane);
 	return ptr;
 }
 
