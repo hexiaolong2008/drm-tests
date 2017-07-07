@@ -309,7 +309,7 @@ int main(int argc, char **argv)
 	}
 
 	uint32_t fbs[BS_ARRAY_LEN(tcases)] = { 0 };
-	struct bs_mapper *mapper = bs_mapper_dma_buf_new();
+	struct bs_mapper *mapper = bs_mapper_gem_new();
 	if (mapper == NULL) {
 		bs_debug_error("failed to create mapper object");
 		return 1;
