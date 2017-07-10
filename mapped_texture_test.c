@@ -216,8 +216,8 @@ static void print_help(const char *argv0)
 	printf("Usage: %s [OPTIONS]\n", argv0);
 	printf(" -h, --help             Print help.\n");
 	printf(" -f, --format FOURCC    format of texture (defaults to ARGB8888)\n");
-	printf(" -b, --dma-buf  Use dma-buf mmap (by default).\n");
-	printf(" -g, --gem      Use GEM map.\n");
+	printf(" -b, --dma-buf  Use dma-buf mmap.\n");
+	printf(" -g, --gem      Use GEM map(by default).\n");
 	printf(" -d, --dumb     Use dump map.\n");
 	printf(" -t, --tiled    Use potentially tiled buffer.\n");
 }
@@ -282,10 +282,10 @@ int main(int argc, char **argv)
 		}
 	}
 
-	// Use dma-buf mmap by default, in case any arguments aren't selected.
+	// Use gem map mapper by default, in case any arguments aren't selected.
 	if (!mapper) {
-		mapper = bs_mapper_dma_buf_new();
-		printf("using dma-buf mmap\n");
+		mapper = bs_mapper_gem_new();
+		printf("using GEM map\n");
 	}
 
 	if (!mapper) {
