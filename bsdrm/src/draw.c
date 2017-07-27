@@ -85,6 +85,25 @@ static const struct bs_draw_format bs_draw_formats[] = {
 	    },
 	},
 	{
+	    PIXEL_FORMAT_AND_NAME(XBGR8888),
+	    3,
+	    {
+		{ { 1.0f, 0.0f, 0.0f }, 0.0f, 1, 1, 4, 0, 0 },
+		{ { 0.0f, 1.0f, 0.0f }, 0.0f, 1, 1, 4, 0, 1 },
+		{ { 0.0f, 0.0f, 1.0f }, 0.0f, 1, 1, 4, 0, 2 },
+	    },
+	},
+	{
+	    PIXEL_FORMAT_AND_NAME(ABGR8888),
+	    4,
+	    {
+		{ { 1.0f, 0.0f, 0.0f }, 0.0f, 1, 1, 4, 0, 0 },
+		{ { 0.0f, 1.0f, 0.0f }, 0.0f, 1, 1, 4, 0, 1 },
+		{ { 0.0f, 0.0f, 1.0f }, 0.0f, 1, 1, 4, 0, 2 },
+		{ { 0.0f, 0.0f, 0.0f }, 255.0f, 1, 1, 4, 0, 3 },
+	    },
+	},
+	{
 	    PIXEL_FORMAT_AND_NAME(YUYV),
 	    3,
 	    {
