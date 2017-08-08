@@ -797,7 +797,6 @@ static int test_fullscreen_video(struct atomictest_context *ctx, struct atomicte
 
 static int test_disable_primary(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
 {
-	int cursor;
 	struct atomictest_plane *primary, *overlay;
 	for (uint32_t i = 0; i < crtc->num_primary; i++) {
 		for (uint32_t j = 0; j < crtc->num_overlay; j++) {
@@ -809,7 +808,6 @@ static int test_disable_primary(struct atomictest_context *ctx, struct atomictes
 			write_to_buffer(ctx->mapper, overlay->bo, 0x00FF0000, 0);
 		}
 
-		cursor = drmModeAtomicGetCursor(ctx->pset);
 		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
 		CHECK_RESULT(init_plane(ctx, primary, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
 					crtc->height, 0, crtc->crtc_id));
@@ -821,7 +819,6 @@ static int test_disable_primary(struct atomictest_context *ctx, struct atomictes
 		disable_plane(ctx, primary);
 		CHECK_RESULT(commit(ctx));
 		usleep(1e6);
-		drmModeAtomicSetCursor(ctx->pset, cursor);
 	}
 
 	return 0;
@@ -845,16 +842,13 @@ static int test_overlay_pageflip(struct atomictest_context *ctx, struct atomicte
 
 static int test_primary_pageflip(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
 {
-	int cursor;
 	struct atomictest_plane *primary;
 	uint32_t formats[3] = { DRM_FORMAT_XRGB8888, DRM_FORMAT_XBGR8888, DRM_FORMAT_RGB565 };
 	for (uint32_t i = 0; i < crtc->num_primary; i++) {
 		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
-		cursor = drmModeAtomicGetCursor(ctx->pset);
 		CHECK_RESULT(pageflip(ctx, primary, 0, 0, crtc->width, crtc->height, 0,
 				      crtc->crtc_id, formats, BS_ARRAY_LEN(formats)));
 
-		drmModeAtomicSetCursor(ctx->pset, cursor);
 	}
 
 	return 0;
@@ -880,10 +874,11 @@ static int run_testcase(struct atomictest_context *ctx, struct atomictest_crtc *
 	for (uint32_t i = 0; i < num_planes; i++)
 		disable_plane(ctx, &crtc->planes[i]);
 
+	drmModeAtomicSetCursor(ctx->pset, cursor);
+
 	CHECK_RESULT(commit(ctx));
 	usleep(1e6 / 60);
 
-	drmModeAtomicSetCursor(ctx->pset, cursor);
 	return ret;
 }
 
