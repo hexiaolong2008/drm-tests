@@ -89,13 +89,13 @@ static uint32_t display_rank(int fd)
 		bool has_connection = connector->connection == DRM_MODE_CONNECTED &&
 				      connector->count_modes > 0 &&
 				      connector_has_crtc(fd, res, connector);
-		drmModeFreeConnector(connector);
 		if (!has_connection)
 			continue;
 
 		uint32_t rank = display_rank_connector_type(connector->connector_type);
 		if (best_rank > rank)
 			best_rank = rank;
+                drmModeFreeConnector(connector);
 	}
 
 out:
