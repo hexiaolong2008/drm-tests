@@ -135,8 +135,7 @@ bool bs_egl_setup(struct bs_egl *self)
 
 	if (!bs_egl_has_extension("EGL_KHR_fence_sync", egl_extensions) &&
 	    !bs_egl_has_extension("EGL_KHR_wait_sync", egl_extensions)) {
-		bs_debug_error(
-		    "EGL_KHR_fence_sync and EGL_KHR_wait_sync extension not supported");
+		bs_debug_error("EGL_KHR_fence_sync and EGL_KHR_wait_sync extension not supported");
 		goto destroy_context;
 	}
 
@@ -195,8 +194,8 @@ EGLImageKHR bs_egl_image_create_gbm(struct bs_egl *self, struct gbm_bo *bo)
 		}
 	}
 
-	// When the bo has 3 planes with modifier support, it requires 37 components.
-	EGLint khr_image_attrs[37] = {
+	// When the bo has 3 planes with modifier support, it requires 39 components.
+	EGLint khr_image_attrs[39] = {
 		EGL_WIDTH,
 		gbm_bo_get_width(bo),
 		EGL_HEIGHT,
@@ -223,6 +222,15 @@ EGLImageKHR bs_egl_image_create_gbm(struct bs_egl *self, struct gbm_bo *bo)
 			    EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT + plane * 2;
 			khr_image_attrs[attrs_index++] = modifier >> 32;
 		}
+	}
+
+	// Instead of disabling the extension completely, allow it to be used
+	// without creating EGLImages with correct attributes on Tegra.
+	// TODO(gsingh): Remove this once Tegra is end-of-life.
+	const char *egl_vendor = eglQueryString(self->display, EGL_VENDOR);
+	if (self->use_image_flush_external && strcmp(egl_vendor, "NVIDIA")) {
+		khr_image_attrs[attrs_index++] = EGL_IMAGE_EXTERNAL_FLUSH_EXT;
+		khr_image_attrs[attrs_index++] = EGL_TRUE;
 	}
 
 	khr_image_attrs[attrs_index++] = EGL_NONE;
