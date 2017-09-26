@@ -400,10 +400,11 @@ static int pageflip(struct atomictest_context *ctx, struct atomictest_plane *pla
 		    uint32_t *formats, uint32_t count_formats)
 {
 	/* Check if plane support specified formats. */
-	for (uint32_t i = 0; i < count_formats; i++)
-		CHECK_RESULT(get_format_idx(plane, formats[i]));
-
 	for (uint32_t i = 0; i < count_formats; i++) {
+		/* continue to loop through all given formats */
+		if (get_format_idx(plane, formats[i]) < 0)
+			continue;
+
 		CHECK_RESULT(init_plane(ctx, plane, formats[i], x, y, w, h, zpos, crtc_id));
 		write_to_buffer(ctx->mapper, plane->bo, 0x00FF0000, 0xF800);
 		CHECK_RESULT(commit(ctx));
