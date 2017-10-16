@@ -407,20 +407,24 @@ static int commit(struct atomictest_context *ctx)
 	return 0;
 }
 
-static int pageflip(struct atomictest_context *ctx, struct atomictest_plane *plane, uint32_t x,
-		    uint32_t y, uint32_t w, uint32_t h, uint32_t zpos, uint32_t crtc_id,
-		    uint32_t *formats, uint32_t count_formats)
+static int pageflip_formats(struct atomictest_context *ctx, struct atomictest_crtc *crtc,
+			    struct atomictest_plane *plane)
 {
-	/* Check if plane support specified formats. */
-	for (uint32_t i = 0; i < count_formats; i++) {
-		/* continue to loop through all given formats */
-		if (get_format_idx(plane, formats[i]) < 0)
+	uint32_t flags;
+	for (uint32_t i = 0; i < plane->drm_plane.count_formats; i++) {
+		flags = (plane->type.value == DRM_PLANE_TYPE_CURSOR) ? GBM_BO_USE_CURSOR
+								     : GBM_BO_USE_SCANOUT;
+		if (!gbm_device_is_format_supported(gbm, plane->drm_plane.formats[i], flags))
 			continue;
 
-		CHECK_RESULT(init_plane(ctx, plane, formats[i], x, y, w, h, zpos, crtc_id));
+		CHECK_RESULT(init_plane(ctx, plane, plane->drm_plane.formats[i], 0, 0, crtc->width,
+					crtc->height, 0, crtc->crtc_id));
 		CHECK_RESULT(draw_to_plane(ctx->mapper, plane, DRAW_ELLIPSE));
 		CHECK_RESULT(commit(ctx));
 		usleep(1e6);
+
+		// disable, but don't commit, since we can't have an active CRTC without any planes.
+		CHECK_RESULT(disable_plane(ctx, plane));
 	}
 
 	return 0;
@@ -829,14 +833,9 @@ static int test_disable_primary(struct atomictest_context *ctx, struct atomictes
 static int test_overlay_pageflip(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
 {
 	struct atomictest_plane *overlay;
-	uint32_t formats[3] = { DRM_FORMAT_XRGB8888, DRM_FORMAT_XBGR8888, DRM_FORMAT_RGB565 };
 	for (uint32_t i = 0; i < crtc->num_overlay; i++) {
 		overlay = get_plane(crtc, i, DRM_PLANE_TYPE_OVERLAY);
-		uint32_t x = crtc->width >> (i + 1);
-		uint32_t y = crtc->height >> (i + 1);
-
-		CHECK_RESULT(pageflip(ctx, overlay, x, y, x, y, i, crtc->crtc_id, formats,
-				      BS_ARRAY_LEN(formats)));
+		CHECK_RESULT(pageflip_formats(ctx, crtc, overlay));
 	}
 
 	return 0;
@@ -845,11 +844,9 @@ static int test_overlay_pageflip(struct atomictest_context *ctx, struct atomicte
 static int test_primary_pageflip(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
 {
 	struct atomictest_plane *primary;
-	uint32_t formats[3] = { DRM_FORMAT_XRGB8888, DRM_FORMAT_XBGR8888, DRM_FORMAT_RGB565 };
 	for (uint32_t i = 0; i < crtc->num_primary; i++) {
 		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
-		CHECK_RESULT(pageflip(ctx, primary, 0, 0, crtc->width, crtc->height, 0,
-				      crtc->crtc_id, formats, BS_ARRAY_LEN(formats)));
+		CHECK_RESULT(pageflip_formats(ctx, crtc, primary));
 	}
 
 	return 0;
