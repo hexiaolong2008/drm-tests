@@ -849,7 +849,6 @@ static int test_primary_pageflip(struct atomictest_context *ctx, struct atomicte
 		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
 		CHECK_RESULT(pageflip(ctx, primary, 0, 0, crtc->width, crtc->height, 0,
 				      crtc->crtc_id, formats, BS_ARRAY_LEN(formats)));
-
 	}
 
 	return 0;
@@ -958,6 +957,7 @@ destroy_fd:
 static const struct option longopts[] = {
 	{ "crtc", required_argument, NULL, 'c' },
 	{ "test_name", required_argument, NULL, 't' },
+	{ "help", no_argument, NULL, 'h' },
 	{ 0, 0, 0, 0 },
 };
 
@@ -976,7 +976,7 @@ int main(int argc, char **argv)
 	char *name = NULL;
 	int32_t crtc_idx = -1;
 	uint32_t crtc_mask = ~0;
-	while ((c = getopt_long(argc, argv, "c:t:", longopts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "c:t:h", longopts, NULL)) != -1) {
 		switch (c) {
 			case 'c':
 				if (sscanf(optarg, "%d", &crtc_idx) != 1)
@@ -990,6 +990,8 @@ int main(int argc, char **argv)
 
 				name = strdup(optarg);
 				break;
+			case 'h':
+				goto print;
 			default:
 				goto print;
 		}
