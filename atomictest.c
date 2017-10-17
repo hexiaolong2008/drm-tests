@@ -126,6 +126,15 @@ struct atomictest_testcase {
 	test_function test_func;
 };
 
+// clang-format off
+enum draw_format_type {
+	DRAW_NONE = 0,
+	DRAW_STRIPE = 1,
+	DRAW_ELLIPSE = 2,
+	DRAW_CURSOR = 3,
+};
+// clang-format on
+
 static int32_t get_format_idx(struct atomictest_plane *plane, uint32_t format)
 {
 	for (int32_t i = 0; i < plane->drm_plane.count_formats; i++)
@@ -166,34 +175,45 @@ static struct atomictest_plane *get_plane(struct atomictest_crtc *crtc, uint32_t
 	return &crtc->planes[index];
 }
 
-static void write_to_buffer(struct bs_mapper *mapper, struct gbm_bo *bo, uint32_t u32, uint16_t u16)
+static int draw_to_plane(struct bs_mapper *mapper, struct atomictest_plane *plane,
+			 enum draw_format_type pattern)
 {
-	void *map_data;
-	uint32_t num_ints;
-	uint32_t format = gbm_bo_get_format(bo);
-	void *addr = bs_mapper_map(mapper, bo, 0, &map_data);
-
-	if (format == GBM_FORMAT_RGB565 || format == GBM_FORMAT_BGR565) {
-		num_ints = gbm_bo_get_plane_size(bo, 0) / sizeof(uint16_t);
-		uint16_t *pixel = (uint16_t *)addr;
-		for (uint32_t i = 0; i < num_ints; i++)
-			pixel[i] = u16;
-	} else {
-		num_ints = gbm_bo_get_plane_size(bo, 0) / sizeof(uint32_t);
-		uint32_t *pixel = (uint32_t *)addr;
-		for (uint32_t i = 0; i < num_ints; i++)
-			pixel[i] = u32;
-	}
-
-	bs_mapper_unmap(mapper, bo, map_data);
-}
-
-static void draw_cursor(struct bs_mapper *mapper, struct gbm_bo *bo)
-{
+	struct gbm_bo *bo = plane->bo;
 	uint32_t format = gbm_bo_get_format(bo);
 	const struct bs_draw_format *draw_format = bs_get_draw_format(format);
-	if (draw_format)
-		bs_draw_cursor(mapper, bo, draw_format);
+
+	if (draw_format && pattern) {
+		switch (pattern) {
+			case DRAW_STRIPE:
+				CHECK(bs_draw_stripe(mapper, bo, draw_format));
+				break;
+			case DRAW_ELLIPSE:
+				CHECK(bs_draw_ellipse(mapper, bo, draw_format, 0));
+				break;
+			case DRAW_CURSOR:
+				CHECK(bs_draw_cursor(mapper, bo, draw_format));
+				break;
+			default:
+				bs_debug_error("invalid draw type");
+				return -1;
+		}
+	} else {
+		// DRM_FORMAT_RGB565 --> red, DRM_FORMAT_BGR565 --> blue,
+		// everything else --> something
+		void *map_data;
+		uint16_t value = 0xF800;
+		void *addr = bs_mapper_map(mapper, bo, 0, &map_data);
+		uint32_t num_shorts = gbm_bo_get_plane_size(bo, 0) / sizeof(uint16_t);
+		uint16_t *pixel = (uint16_t *)addr;
+
+		CHECK(addr);
+		for (uint32_t i = 0; i < num_shorts; i++)
+			pixel[i] = value;
+
+		bs_mapper_unmap(mapper, bo, map_data);
+	}
+
+	return 0;
 }
 
 static int get_prop(int fd, drmModeObjectPropertiesPtr props, const char *name,
@@ -398,7 +418,7 @@ static int pageflip(struct atomictest_context *ctx, struct atomictest_plane *pla
 			continue;
 
 		CHECK_RESULT(init_plane(ctx, plane, formats[i], x, y, w, h, zpos, crtc_id));
-		write_to_buffer(ctx->mapper, plane->bo, 0x00FF0000, 0xF800);
+		CHECK_RESULT(draw_to_plane(ctx->mapper, plane, DRAW_ELLIPSE));
 		CHECK_RESULT(commit(ctx));
 		usleep(1e6);
 	}
@@ -683,20 +703,16 @@ static int test_multiple_planes(struct atomictest_context *ctx, struct atomictes
 					}
 				}
 
-				if (added_video) {
-					const struct bs_draw_format *draw_format =
-					    bs_get_draw_format(yuv_formats[k]);
-					CHECK(draw_format);
-					CHECK(
-					    bs_draw_stripe(ctx->mapper, overlay->bo, draw_format));
-				}
+				if (added_video)
+					CHECK_RESULT(
+					    draw_to_plane(ctx->mapper, overlay, DRAW_STRIPE));
 			}
 
 			if (!added_video) {
 				added_video = true;
 				CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, x, y, x,
 							y, i, crtc->crtc_id));
-				write_to_buffer(ctx->mapper, overlay->bo, 0x00FF0000, 0);
+				CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_ELLIPSE));
 			}
 		}
 
@@ -706,13 +722,13 @@ static int test_multiple_planes(struct atomictest_context *ctx, struct atomictes
 			cursor = get_plane(crtc, j, DRM_PLANE_TYPE_CURSOR);
 			CHECK_RESULT(init_plane(ctx, cursor, DRM_FORMAT_ARGB8888, x, y, CURSOR_SIZE,
 						CURSOR_SIZE, crtc->num_overlay + j, crtc->crtc_id));
-			draw_cursor(ctx->mapper, cursor->bo);
+			CHECK_RESULT(draw_to_plane(ctx->mapper, cursor, DRAW_CURSOR));
 		}
 
 		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
 		CHECK_RESULT(init_plane(ctx, primary, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
 					crtc->height, 0, crtc->crtc_id));
-		write_to_buffer(ctx->mapper, primary->bo, 0x00000FF, 0);
+		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_ELLIPSE));
 
 		uint32_t num_planes = crtc->num_primary + crtc->num_cursor + crtc->num_overlay;
 		int done = 0;
@@ -751,10 +767,7 @@ static int test_video_overlay(struct atomictest_context *ctx, struct atomictest_
 				       crtc->crtc_id))
 				continue;
 
-			const struct bs_draw_format *draw_format =
-			    bs_get_draw_format(yuv_formats[j]);
-			CHECK(draw_format);
-			CHECK(bs_draw_stripe(ctx->mapper, overlay->bo, draw_format));
+			CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_STRIPE));
 			while (!move_plane(ctx, crtc, overlay, 20, 20)) {
 				CHECK_RESULT(commit(ctx));
 				usleep(1e6 / 60);
@@ -775,11 +788,7 @@ static int test_fullscreen_video(struct atomictest_context *ctx, struct atomicte
 				       crtc->height, 0, crtc->crtc_id))
 				continue;
 
-			const struct bs_draw_format *draw_format =
-			    bs_get_draw_format(yuv_formats[j]);
-			CHECK(draw_format);
-
-			CHECK(bs_draw_stripe(ctx->mapper, primary->bo, draw_format));
+			CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_STRIPE));
 			CHECK_RESULT(commit(ctx));
 			usleep(1e6);
 		}
@@ -798,13 +807,13 @@ static int test_disable_primary(struct atomictest_context *ctx, struct atomictes
 			uint32_t y = crtc->height >> (j + 2);
 			CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, x, y, x, y, i,
 						crtc->crtc_id));
-			write_to_buffer(ctx->mapper, overlay->bo, 0x00FF0000, 0);
+			CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_ELLIPSE));
 		}
 
 		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
 		CHECK_RESULT(init_plane(ctx, primary, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
 					crtc->height, 0, crtc->crtc_id));
-		write_to_buffer(ctx->mapper, primary->bo, 0x00000FF, 0);
+		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_ELLIPSE));
 		CHECK_RESULT(commit(ctx));
 		usleep(1e6);
 
