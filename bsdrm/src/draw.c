@@ -305,6 +305,15 @@ static void compute_ellipse(struct draw_data *data)
 	}
 }
 
+static void compute_cursor(struct draw_data *data)
+{
+	// A white triangle pointing right
+	if (data->y > data->x / 2 && data->y < (data->w - data->x / 2))
+		memset(data->out_color, 0xFF, 4);
+	else
+		memset(data->out_color, 0, 4);
+}
+
 bool bs_draw_stripe(struct bs_mapper *mapper, struct gbm_bo *bo,
 		    const struct bs_draw_format *format)
 {
@@ -318,6 +327,13 @@ bool bs_draw_ellipse(struct bs_mapper *mapper, struct gbm_bo *bo,
 	struct draw_data data = { 0 };
 	data.progress = progress;
 	return draw_color(mapper, bo, format, &data, compute_ellipse);
+}
+
+bool bs_draw_cursor(struct bs_mapper *mapper, struct gbm_bo *bo,
+		    const struct bs_draw_format *format)
+{
+	struct draw_data data = { 0 };
+	return draw_color(mapper, bo, format, &data, compute_cursor);
 }
 
 const struct bs_draw_format *bs_get_draw_format(uint32_t pixel_format)

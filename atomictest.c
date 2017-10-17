@@ -190,18 +190,10 @@ static void write_to_buffer(struct bs_mapper *mapper, struct gbm_bo *bo, uint32_
 
 static void draw_cursor(struct bs_mapper *mapper, struct gbm_bo *bo)
 {
-	void *map_data;
-	uint32_t *cursor_ptr = bs_mapper_map(mapper, bo, 0, &map_data);
-	for (size_t y = 0; y < gbm_bo_get_height(bo); y++) {
-		for (size_t x = 0; x < gbm_bo_get_width(bo); x++) {
-			// A white triangle pointing right
-			bool color_white = y > x / 2 && y < (gbm_bo_get_width(bo) - x / 2);
-			cursor_ptr[y * gbm_bo_get_height(bo) + x] =
-			    color_white ? 0xFFFFFFFF : 0x00000000;
-		}
-	}
-
-	bs_mapper_unmap(mapper, bo, map_data);
+	uint32_t format = gbm_bo_get_format(bo);
+	const struct bs_draw_format *draw_format = bs_get_draw_format(format);
+	if (draw_format)
+		bs_draw_cursor(mapper, bo, draw_format);
 }
 
 static int get_prop(int fd, drmModeObjectPropertiesPtr props, const char *name,

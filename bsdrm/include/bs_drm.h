@@ -212,6 +212,8 @@ bool bs_draw_stripe(struct bs_mapper *mapper, struct gbm_bo *bo,
 		    const struct bs_draw_format *format);
 bool bs_draw_ellipse(struct bs_mapper *mapper, struct gbm_bo *bo,
 		     const struct bs_draw_format *format, float progress);
+bool bs_draw_cursor(struct bs_mapper *mapper, struct gbm_bo *bo,
+		    const struct bs_draw_format *format);
 const struct bs_draw_format *bs_get_draw_format(uint32_t pixel_format);
 const struct bs_draw_format *bs_get_draw_format_from_name(const char *str);
 uint32_t bs_get_pixel_format(const struct bs_draw_format *format);

@@ -104,20 +104,16 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	uint8_t *cursor_ptr = bs_mapper_map(mapper, cursor_bo, 0, &map_data);
-	if (cursor_ptr == MAP_FAILED) {
-		bs_debug_error("failed to mmap cursor buffer object");
+	const struct bs_draw_format *draw_format = bs_get_draw_format(GBM_FORMAT_ARGB8888);
+	if (!draw_format) {
+		bs_debug_error("failed to get draw format");
 		return 1;
 	}
-	for (size_t y = 0; y < cursor_size; y++) {
-		for (size_t x = 0; x < cursor_size; x++) {
-			// A white triangle pointing right
-			bool color_white = y > x / 2 && y < (cursor_size - x / 2);
-			memset(&cursor_ptr[y * cursor_size * 4 + x * 4], color_white ? 0xFF : 0x00,
-			       4);
-		}
+
+	if (!bs_draw_cursor(mapper, cursor_bo, draw_format)) {
+		bs_debug_error("failed to draw cursor");
+		return 1;
 	}
-	bs_mapper_unmap(mapper, cursor_bo, map_data);
 
 	ret = drmModeSetCursor(fd, crtc_id, gbm_bo_get_handle(cursor_bo).u32, cursor_size,
 			       cursor_size);
