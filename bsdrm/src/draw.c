@@ -34,6 +34,13 @@ struct draw_data {
 	uint8_t out_color[MAX_COMPONENTS];
 };
 
+struct draw_data_lines {
+	struct draw_data base;
+	bool color_olive;
+	uint32_t interval;
+	uint32_t stop;
+};
+
 typedef void (*compute_color_t)(struct draw_data *data);
 
 #define PIXEL_FORMAT_AND_NAME(x) GBM_FORMAT_##x, #x
@@ -314,6 +321,50 @@ static void compute_cursor(struct draw_data *data)
 		memset(data->out_color, 0, 4);
 }
 
+static void compute_lines(struct draw_data *data)
+{
+	struct draw_data_lines *line_data = (struct draw_data_lines *)data;
+	// horizontal stripes on first vertical half, vertical stripes on next half
+	if (line_data->base.y < (line_data->base.h / 2)) {
+		if (line_data->base.x == 0) {
+			line_data->color_olive = false;
+			line_data->interval = 5;
+			line_data->stop = line_data->base.x + line_data->interval;
+		} else if (line_data->base.x >= line_data->stop) {
+			if (line_data->color_olive)
+				line_data->interval += 5;
+
+			line_data->stop += line_data->interval;
+			line_data->color_olive = !line_data->color_olive;
+		}
+	} else {
+		if (line_data->base.y == (line_data->base.h / 2)) {
+			line_data->color_olive = false;
+			line_data->interval = 10;
+			line_data->stop = line_data->base.y + line_data->interval;
+		} else if (line_data->base.y >= line_data->stop) {
+			if (line_data->color_olive)
+				line_data->interval += 5;
+
+			line_data->stop += line_data->interval;
+			line_data->color_olive = !line_data->color_olive;
+		}
+	}
+	if (line_data->color_olive) {
+		// yellowish green color
+		line_data->base.out_color[0] = 0;
+		line_data->base.out_color[1] = 128;
+		line_data->base.out_color[2] = 128;
+		line_data->base.out_color[3] = 0;
+	} else {
+		// fuchsia
+		line_data->base.out_color[0] = 255;
+		line_data->base.out_color[1] = 0;
+		line_data->base.out_color[2] = 255;
+		line_data->base.out_color[3] = 0;
+	}
+}
+
 bool bs_draw_stripe(struct bs_mapper *mapper, struct gbm_bo *bo,
 		    const struct bs_draw_format *format)
 {
@@ -334,6 +385,12 @@ bool bs_draw_cursor(struct bs_mapper *mapper, struct gbm_bo *bo,
 {
 	struct draw_data data = { 0 };
 	return draw_color(mapper, bo, format, &data, compute_cursor);
+}
+
+bool bs_draw_lines(struct bs_mapper *mapper, struct gbm_bo *bo, const struct bs_draw_format *format)
+{
+	struct draw_data_lines line_data = { { 0 } };
+	return draw_color(mapper, bo, format, &line_data.base, compute_lines);
 }
 
 const struct bs_draw_format *bs_get_draw_format(uint32_t pixel_format)

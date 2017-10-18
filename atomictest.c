@@ -132,6 +132,7 @@ enum draw_format_type {
 	DRAW_STRIPE = 1,
 	DRAW_ELLIPSE = 2,
 	DRAW_CURSOR = 3,
+	DRAW_LINES = 4,
 };
 // clang-format on
 
@@ -192,6 +193,9 @@ static int draw_to_plane(struct bs_mapper *mapper, struct atomictest_plane *plan
 				break;
 			case DRAW_CURSOR:
 				CHECK(bs_draw_cursor(mapper, bo, draw_format));
+				break;
+			case DRAW_LINES:
+				CHECK(bs_draw_lines(mapper, bo, draw_format));
 				break;
 			default:
 				bs_debug_error("invalid draw type");
@@ -716,7 +720,7 @@ static int test_multiple_planes(struct atomictest_context *ctx, struct atomictes
 				added_video = true;
 				CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, x, y, x,
 							y, i, crtc->crtc_id));
-				CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_ELLIPSE));
+				CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_LINES));
 			}
 		}
 
@@ -811,7 +815,7 @@ static int test_disable_primary(struct atomictest_context *ctx, struct atomictes
 			uint32_t y = crtc->height >> (j + 2);
 			CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, x, y, x, y, i,
 						crtc->crtc_id));
-			CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_ELLIPSE));
+			CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_LINES));
 		}
 
 		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
