@@ -10,6 +10,15 @@
 
 #define NUM_BUFFERS 2
 
+static uint32_t allowed_formats[] = {
+	GBM_FORMAT_XRGB8888,
+	GBM_FORMAT_XBGR8888,
+	GBM_FORMAT_XRGB2101010,
+	GBM_FORMAT_XBGR2101010,
+};
+
+const size_t allowed_formats_length = BS_ARRAY_LEN(allowed_formats);
+
 static GLuint solid_shader_create()
 {
 	const GLchar *vert =
@@ -29,7 +38,9 @@ static GLuint solid_shader_create()
 	    "}\n";
 
 	struct bs_gl_program_create_binding bindings[] = {
-		{ 0, "vPosition" }, { 1, "vColor" }, { 0, NULL },
+		{ 0, "vPosition" },
+		{ 1, "vColor" },
+		{ 0, NULL },
 	};
 
 	return bs_gl_program_create_vert_frag_bind(vert, frag, bindings);
@@ -62,18 +73,45 @@ static void page_flip_handler(int fd, unsigned int frame, unsigned int sec, unsi
 	*waiting_for_flip = 0;
 }
 
+static uint32_t find_format(char *fourcc)
+{
+	if (!fourcc || strlen(fourcc) < 4)
+		return 0;
+
+	uint32_t format = fourcc_code(fourcc[0], fourcc[1], fourcc[2], fourcc[3]);
+	for (int i = 0; i < allowed_formats_length; i++) {
+		if (allowed_formats[i] == format)
+			return format;
+	}
+
+	return 0;
+}
+
 static const struct option longopts[] = {
-	{ "test-page-flip-format-change", no_argument, NULL, 'f' },
+	{ "format", required_argument, NULL, 'f' },
+	{ "test-page-flip-format-change", required_argument, NULL, 'p' },
 	{ "help", no_argument, NULL, 'h' },
 	{ 0, 0, 0, 0 },
 };
 
 static void print_help(const char *argv0)
 {
+	char allowed_formats_string[allowed_formats_length * 6];
+	int i;
+	for (i = 0; i < allowed_formats_length; i++) {
+		uint32_t format = allowed_formats[i];
+		sprintf(allowed_formats_string + i * 6, "%.4s, ", (char *)&format);
+	}
+
+	allowed_formats_string[i * 6 - 2] = 0;
+
 	// clang-format off
 	printf("usage: %s [OPTIONS] [drm_device_path]\n", argv0);
-	printf("  -f, --test-page-flip-format-change		    test page flips alternating RGB and BGR fbs\n");
+	printf("  -f, --format <format>			    defines the fb format.\n");
+	printf("  -p, --test-page-flip-format-change <format>	test page flips alternating formats.\n");
 	printf("  -h, --help		    show help\n");
+	printf("\n");
+        printf(" <format> must be one of [ %s ].\n", allowed_formats_string);
 	printf("\n");
 	printf("\n");
 	// clang-format on
@@ -82,14 +120,22 @@ static void print_help(const char *argv0)
 int main(int argc, char **argv)
 {
 	int fd = -1;
-	bool test_page_flip_format_change = false;
 	bool help_flag = false;
+	uint32_t format = GBM_FORMAT_XRGB8888;
+	uint32_t test_page_flip_format_change = GBM_FORMAT_XRGB8888;
 
 	int c = -1;
-	while ((c = getopt_long(argc, argv, "fh", longopts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "hp:f:", longopts, NULL)) != -1) {
 		switch (c) {
+			case 'p':
+				test_page_flip_format_change = find_format(optarg);
+				if (!test_page_flip_format_change)
+					help_flag = true;
+				break;
 			case 'f':
-				test_page_flip_format_change = true;
+				format = find_format(optarg);
+				if (!format)
+					help_flag = true;
 				break;
 			case 'h':
 				help_flag = true;
@@ -142,9 +188,8 @@ int main(int argc, char **argv)
 	struct bs_egl_fb *egl_fbs[NUM_BUFFERS];
 	EGLImageKHR egl_images[NUM_BUFFERS];
 	for (size_t fb_index = 0; fb_index < NUM_BUFFERS; fb_index++) {
-		uint32_t format = GBM_FORMAT_XRGB8888;
 		if (test_page_flip_format_change && fb_index) {
-			format = GBM_FORMAT_XBGR8888;
+			format = test_page_flip_format_change;
 		}
 
 		bos[fb_index] = gbm_bo_create(gbm, mode->hdisplay, mode->vdisplay, format,
