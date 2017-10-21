@@ -422,6 +422,22 @@ static int move_plane(struct atomictest_context *ctx, struct atomictest_crtc *cr
 	return -1;
 }
 
+static int scale_plane(struct atomictest_context *ctx, struct atomictest_crtc *crtc,
+		       struct atomictest_plane *plane, float dw, float dh)
+{
+	int32_t plane_w = (int32_t)plane->crtc_w.value + dw * plane->crtc_w.value;
+	int32_t plane_h = (int32_t)plane->crtc_h.value + dh * plane->crtc_h.value;
+	if (plane_w > 0 && plane_h > 0 && (plane->crtc_x.value + plane_w < crtc->width) &&
+	    (plane->crtc_h.value + plane_h < crtc->height)) {
+		plane->crtc_w.value = BS_ALIGN((uint32_t)plane_w, 2);
+		plane->crtc_h.value = BS_ALIGN((uint32_t)plane_h, 2);
+		CHECK_RESULT(set_plane_props(plane, ctx->pset));
+		return 0;
+	}
+
+	return -1;
+}
+
 static void log(struct atomictest_context *ctx)
 {
 	printf("Committing the following configuration: \n");
@@ -956,6 +972,60 @@ static int test_overlay_pageflip(struct atomictest_context *ctx, struct atomicte
 	return 0;
 }
 
+static int test_overlay_downscaling(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
+{
+	struct atomictest_plane *overlay;
+	uint32_t w = BS_ALIGN(crtc->width / 2, 2);
+	uint32_t h = BS_ALIGN(crtc->height / 2, 2);
+	for (uint32_t i = 0; i < crtc->num_overlay; i++) {
+		overlay = get_plane(crtc, i, DRM_PLANE_TYPE_OVERLAY);
+		if (init_yuv_plane(ctx, overlay, 0, 0, w, h, crtc->crtc_id)) {
+			CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, 0, 0, w, h,
+						crtc->crtc_id));
+		}
+
+		CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_LINES));
+		CHECK_RESULT(commit(ctx));
+		usleep(1e6);
+
+		while (!scale_plane(ctx, crtc, overlay, -.1f, -.1f) && !test_commit(ctx)) {
+			CHECK_RESULT(commit(ctx));
+			usleep(1e6);
+		}
+
+		disable_plane(ctx, overlay);
+	}
+
+	return 0;
+}
+
+static int test_overlay_upscaling(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
+{
+	struct atomictest_plane *overlay;
+	uint32_t w = BS_ALIGN(crtc->width / 4, 2);
+	uint32_t h = BS_ALIGN(crtc->height / 4, 2);
+	for (uint32_t i = 0; i < crtc->num_overlay; i++) {
+		overlay = get_plane(crtc, i, DRM_PLANE_TYPE_OVERLAY);
+		if (init_yuv_plane(ctx, overlay, 0, 0, w, h, crtc->crtc_id)) {
+			CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, 0, 0, w, h,
+						crtc->crtc_id));
+		}
+
+		CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_LINES));
+		CHECK_RESULT(commit(ctx));
+		usleep(1e6);
+
+		while (!scale_plane(ctx, crtc, overlay, .1f, .1f) && !test_commit(ctx)) {
+			CHECK_RESULT(commit(ctx));
+			usleep(1e6);
+		}
+
+		disable_plane(ctx, overlay);
+	}
+
+	return 0;
+}
+
 static int test_primary_pageflip(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
 {
 	struct atomictest_plane *primary;
@@ -972,6 +1042,8 @@ static const struct atomictest_testcase cases[] = {
 	{ "fullscreen_video", test_fullscreen_video },
 	{ "multiple_planes", test_multiple_planes },
 	{ "overlay_pageflip", test_overlay_pageflip },
+	{ "overlay_downscaling", test_overlay_downscaling },
+	{ "overlay_upscaling", test_overlay_upscaling },
 	{ "primary_pageflip", test_primary_pageflip },
 	{ "video_overlay", test_video_overlay },
 	{ "orientation", test_orientation },
