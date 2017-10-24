@@ -47,7 +47,7 @@
 #endif
 
 static const uint32_t yuv_formats[] = {
-	DRM_FORMAT_NV12, DRM_FORMAT_UYVY, DRM_FORMAT_YUYV, DRM_FORMAT_YVU420,
+	DRM_FORMAT_NV12, DRM_FORMAT_YVU420,
 };
 
 static struct gbm_device *gbm = NULL;
@@ -376,6 +376,17 @@ static int init_plane(struct atomictest_context *ctx, struct atomictest_plane *p
 
 	CHECK_RESULT(add_plane_fb(ctx, plane));
 	return 0;
+}
+
+static int init_yuv_plane(struct atomictest_context *ctx, struct atomictest_plane *plane,
+			  uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t crtc_id)
+{
+	uint32_t i;
+	for (i = 0; i < BS_ARRAY_LEN(yuv_formats); i++)
+		if (!init_plane(ctx, plane, yuv_formats[i], x, y, w, h, crtc_id))
+			return 0;
+
+	return -EINVAL;
 }
 
 static int disable_plane(struct atomictest_context *ctx, struct atomictest_plane *plane)
@@ -715,7 +726,7 @@ static int test_multiple_planes(struct atomictest_context *ctx, struct atomictes
 {
 	struct atomictest_plane *primary, *overlay, *cursor;
 	for (uint32_t i = 0; i < crtc->num_primary; i++) {
-		bool has_video = false;
+		bool video = true;
 		uint32_t x, y;
 		for (uint32_t j = 0; j < crtc->num_overlay; j++) {
 			overlay = get_plane(crtc, j, DRM_PLANE_TYPE_OVERLAY);
@@ -725,25 +736,10 @@ static int test_multiple_planes(struct atomictest_context *ctx, struct atomictes
 			// formats.
 			x = BS_ALIGN(x, 2);
 			y = BS_ALIGN(y, 2);
-			bool added_video = false;
-			if (!has_video) {
-				uint32_t k = 0;
-				for (k = 0; k < BS_ARRAY_LEN(yuv_formats); k++) {
-					if (!init_plane(ctx, overlay, yuv_formats[k], x, y, x, y,
-							crtc->crtc_id)) {
-						has_video = true;
-						added_video = true;
-						break;
-					}
-				}
-
-				if (added_video)
-					CHECK_RESULT(
-					    draw_to_plane(ctx->mapper, overlay, DRAW_STRIPE));
-			}
-
-			if (!added_video) {
-				added_video = true;
+			if (video && !init_yuv_plane(ctx, overlay, x, y, x, y, crtc->crtc_id)) {
+				CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_STRIPE));
+				video = false;
+			} else {
 				CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, x, y, x,
 							y, crtc->crtc_id));
 				CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_LINES));
@@ -796,15 +792,13 @@ static int test_video_overlay(struct atomictest_context *ctx, struct atomictest_
 	struct atomictest_plane *overlay;
 	for (uint32_t i = 0; i < crtc->num_overlay; i++) {
 		overlay = get_plane(crtc, i, DRM_PLANE_TYPE_OVERLAY);
-		for (uint32_t j = 0; j < BS_ARRAY_LEN(yuv_formats); j++) {
-			if (init_plane(ctx, overlay, yuv_formats[j], 0, 0, 800, 800, crtc->crtc_id))
-				continue;
+		if (init_yuv_plane(ctx, overlay, 0, 0, 800, 800, crtc->crtc_id))
+			continue;
 
-			CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_STRIPE));
-			while (!move_plane(ctx, crtc, overlay, 20, 20)) {
-				CHECK_RESULT(commit(ctx));
-				usleep(1e6 / 60);
-			}
+		CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_STRIPE));
+		while (!move_plane(ctx, crtc, overlay, 20, 20)) {
+			CHECK_RESULT(commit(ctx));
+			usleep(1e6 / 60);
 		}
 	}
 
@@ -870,15 +864,12 @@ static int test_fullscreen_video(struct atomictest_context *ctx, struct atomicte
 	struct atomictest_plane *primary;
 	for (uint32_t i = 0; i < crtc->num_primary; i++) {
 		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
-		for (uint32_t j = 0; j < BS_ARRAY_LEN(yuv_formats); j++) {
-			if (init_plane(ctx, primary, yuv_formats[j], 0, 0, crtc->width,
-				       crtc->height, crtc->crtc_id))
-				continue;
+		if (init_yuv_plane(ctx, primary, 0, 0, crtc->width, crtc->height, crtc->crtc_id))
+			continue;
 
-			CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_STRIPE));
-			CHECK_RESULT(commit(ctx));
-			usleep(1e6);
-		}
+		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_STRIPE));
+		CHECK_RESULT(commit(ctx));
+		usleep(1e6);
 	}
 
 	return 0;
