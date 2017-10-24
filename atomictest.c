@@ -422,6 +422,46 @@ static int move_plane(struct atomictest_context *ctx, struct atomictest_crtc *cr
 	return -1;
 }
 
+static void log(struct atomictest_context *ctx)
+{
+	printf("Committing the following configuration: \n");
+	for (uint32_t i = 0; i < ctx->num_crtcs; i++) {
+		struct atomictest_plane *plane;
+		struct atomictest_crtc *crtc = &ctx->crtcs[i];
+		uint32_t num_planes = crtc->num_primary + crtc->num_cursor + crtc->num_overlay;
+		if (!crtc->active.value)
+			continue;
+
+		printf("----- [CRTC: %u] -----\n", crtc->crtc_id);
+		for (uint32_t j = 0; j < num_planes; j++) {
+			plane = &crtc->planes[j];
+			if (plane->crtc_id.value == crtc->crtc_id && plane->fb_id.value) {
+				uint32_t format = gbm_bo_get_format(plane->bo);
+				char *fourcc = (char *)&format;
+				printf("\t{Plane ID: %u, ", plane->drm_plane.plane_id);
+				printf("Plane format: %c%c%c%c, ", fourcc[0], fourcc[1], fourcc[2],
+				       fourcc[3]);
+				printf("Plane type: ");
+				switch (plane->type.value) {
+					case DRM_PLANE_TYPE_OVERLAY:
+						printf("overlay, ");
+						break;
+					case DRM_PLANE_TYPE_PRIMARY:
+						printf("primary, ");
+						break;
+					case DRM_PLANE_TYPE_CURSOR:
+						printf("cursor, ");
+						break;
+				}
+
+				printf("CRTC_X: %u, CRTC_Y: %u, CRTC_W: %u, CRTC_H: %u}\n",
+				       plane->crtc_x.value, plane->crtc_y.value,
+				       plane->crtc_w.value, plane->crtc_h.value);
+			}
+		}
+	}
+}
+
 static int test_commit(struct atomictest_context *ctx)
 {
 	return drmModeAtomicCommit(ctx->fd, ctx->pset, DRM_MODE_ATOMIC_TEST_ONLY, NULL);
@@ -434,6 +474,7 @@ static int commit(struct atomictest_context *ctx)
 	FD_ZERO(&fds);
 	FD_SET(ctx->fd, &fds);
 
+	log(ctx);
 	ret = drmModeAtomicCommit(ctx->fd, ctx->pset,
 				  DRM_MODE_PAGE_FLIP_EVENT | DRM_MODE_ATOMIC_ALLOW_MODESET, NULL);
 	CHECK_RESULT(ret);
