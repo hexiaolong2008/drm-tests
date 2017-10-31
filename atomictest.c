@@ -157,11 +157,7 @@ static void copy_drm_plane(drmModePlane *dest, drmModePlane *src)
 {
 	memcpy(dest, src, sizeof(drmModePlane));
 	dest->formats = calloc(src->count_formats, sizeof(uint32_t));
-	dest->format_modifiers =
-	    calloc(src->count_format_modifiers, sizeof(struct drm_format_modifier));
 	memcpy(dest->formats, src->formats, src->count_formats * sizeof(uint32_t));
-	memcpy(dest->format_modifiers, src->format_modifiers,
-	       src->count_format_modifiers * sizeof(struct drm_format_modifier));
 }
 
 static struct atomictest_plane *get_plane(struct atomictest_crtc *crtc, uint32_t idx, uint64_t type)
@@ -647,7 +643,6 @@ static void free_context(struct atomictest_context *ctx)
 		for (uint32_t j = 0; j < num_planes; j++) {
 			remove_plane_fb(ctx, &ctx->crtcs[i].planes[j]);
 			free(ctx->crtcs[i].planes[j].drm_plane.formats);
-			free(ctx->crtcs[i].planes[j].drm_plane.format_modifiers);
 		}
 
 		free(ctx->crtcs[i].planes);
@@ -728,7 +723,7 @@ static struct atomictest_context *query_kms(int fd)
 	uint32_t overlay_idx, primary_idx, cursor_idx, idx;
 
 	for (uint32_t plane_index = 0; plane_index < plane_res->count_planes; plane_index++) {
-		drmModePlane *plane = drmModeGetPlane2(fd, plane_res->planes[plane_index]);
+		drmModePlane *plane = drmModeGetPlane(fd, plane_res->planes[plane_index]);
 		if (plane == NULL) {
 			bs_debug_error("failed to get plane id %u", plane_res->planes[plane_index]);
 			continue;
