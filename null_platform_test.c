@@ -122,7 +122,7 @@ int main(int argc, char **argv)
 	int fd = -1;
 	bool help_flag = false;
 	uint32_t format = GBM_FORMAT_XRGB8888;
-	uint32_t test_page_flip_format_change = GBM_FORMAT_XRGB8888;
+	uint32_t test_page_flip_format_change = 0;
 
 	int c = -1;
 	while ((c = getopt_long(argc, argv, "hp:f:", longopts, NULL)) != -1) {
