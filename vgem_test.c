@@ -20,7 +20,6 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <xf86drm.h>
@@ -28,31 +27,29 @@
 #define WITH_COLOR 1
 
 #if WITH_COLOR
-#define ANSI_COLOR_RED     "\x1b[31m"
-#define ANSI_COLOR_GREEN   "\x1b[32m"
-#define ANSI_COLOR_YELLOW  "\x1b[33m"
-#define ANSI_COLOR_BLUE    "\x1b[34m"
+#define ANSI_COLOR_RED "\x1b[31m"
+#define ANSI_COLOR_GREEN "\x1b[32m"
+#define ANSI_COLOR_YELLOW "\x1b[33m"
+#define ANSI_COLOR_BLUE "\x1b[34m"
 #define ANSI_COLOR_MAGENTA "\x1b[35m"
-#define ANSI_COLOR_CYAN    "\x1b[36m"
-#define ANSI_COLOR_RESET   "\x1b[0m"
+#define ANSI_COLOR_CYAN "\x1b[36m"
+#define ANSI_COLOR_RESET "\x1b[0m"
 #else
-#define ANSI_COLOR_RED     ""
-#define ANSI_COLOR_GREEN   ""
-#define ANSI_COLOR_YELLOW  ""
-#define ANSI_COLOR_BLUE    ""
+#define ANSI_COLOR_RED ""
+#define ANSI_COLOR_GREEN ""
+#define ANSI_COLOR_YELLOW ""
+#define ANSI_COLOR_BLUE ""
 #define ANSI_COLOR_MAGENTA ""
-#define ANSI_COLOR_CYAN    ""
-#define ANSI_COLOR_RESET   ""
+#define ANSI_COLOR_CYAN ""
+#define ANSI_COLOR_RESET ""
 #endif
 
 #define FAIL_COLOR ANSI_COLOR_RED "failed" ANSI_COLOR_RESET
 #define SUCCESS_COLOR(x) ANSI_COLOR_GREEN x ANSI_COLOR_RESET
 
 const uint32_t g_bo_pattern = 0xdeadbeef;
-const char g_sys_card_path_format[] =
-	"/sys/bus/platform/devices/vgem/drm/card%d";
-const char g_dev_card_path_format[] =
-	"/dev/dri/card%d";
+const char g_sys_card_path_format[] = "/sys/bus/platform/devices/vgem/drm/card%d";
+const char g_dev_card_path_format[] = "/dev/dri/card%d";
 
 int drm_open_vgem()
 {
@@ -84,7 +81,7 @@ int drm_open_vgem()
 	return -1;
 }
 
-int create_vgem_bo(int fd, size_t size, uint32_t * handle)
+int create_vgem_bo(int fd, size_t size, uint32_t *handle)
 {
 	struct drm_mode_create_dumb create;
 	int ret;
@@ -105,7 +102,7 @@ int create_vgem_bo(int fd, size_t size, uint32_t * handle)
 	return 0;
 }
 
-void * mmap_dumb_bo(int fd, int handle, size_t size)
+void *mmap_dumb_bo(int fd, int handle, size_t size)
 {
 	struct drm_mode_map_dumb mmap_arg;
 	void *ptr;
@@ -119,26 +116,26 @@ void * mmap_dumb_bo(int fd, int handle, size_t size)
 	assert(ret == 0);
 	assert(mmap_arg.offset != 0);
 
-	ptr = mmap(NULL, size, (PROT_READ|PROT_WRITE), MAP_SHARED, fd,
-		   mmap_arg.offset);
+	ptr = mmap(NULL, size, (PROT_READ | PROT_WRITE), MAP_SHARED, fd, mmap_arg.offset);
 
 	return ptr;
 }
 
-void write_pattern(volatile uint32_t * bo_ptr, size_t bo_size)
+void write_pattern(volatile uint32_t *bo_ptr, size_t bo_size)
 {
-	volatile uint32_t * ptr;
+	volatile uint32_t *ptr;
 	for (ptr = bo_ptr; ptr < bo_ptr + (bo_size / sizeof(*bo_ptr)); ptr++) {
 		*ptr = g_bo_pattern;
 	}
 }
 
-bool verify_pattern(volatile uint32_t * bo_ptr, size_t bo_size)
+bool verify_pattern(volatile uint32_t *bo_ptr, size_t bo_size)
 {
-	volatile uint32_t * ptr;
+	volatile uint32_t *ptr;
 	for (ptr = bo_ptr; ptr < bo_ptr + (bo_size / sizeof(*bo_ptr)); ptr++) {
 		if (*ptr != g_bo_pattern) {
-			fprintf(stderr, "buffer object verify " FAIL_COLOR " at offset %td = 0x%X\n",
+			fprintf(stderr,
+				"buffer object verify " FAIL_COLOR " at offset %td = 0x%X\n",
 				(void *)ptr - (void *)bo_ptr, *ptr);
 			return false;
 		}
@@ -148,23 +145,23 @@ bool verify_pattern(volatile uint32_t * bo_ptr, size_t bo_size)
 }
 
 static const char help_text[] =
-"Usage: %s [OPTIONS]\n"
-" -h          Print this help.\n"
-" -d [DEVICE] Open the given vgem device file (defaults to trying all cards under /sys/bus/platform/devices/vgem/drm/).\n"
-" -c [SIZE]   Create a buffer objects of the given size in bytes.\n";
+    "Usage: %s [OPTIONS]\n"
+    " -h          Print this help.\n"
+    " -d [DEVICE] Open the given vgem device file (defaults to trying all cards under "
+    "/sys/bus/platform/devices/vgem/drm/).\n"
+    " -c [SIZE]   Create a buffer objects of the given size in bytes.\n";
 
-void print_help(const char * argv0)
+void print_help(const char *argv0)
 {
-
 	printf(help_text, argv0);
 }
 
 static const char optstr[] = "hd:c:";
 
-int main(int argc, char * argv[])
+int main(int argc, char *argv[])
 {
 	int ret = 0;
-	const char * device_file = NULL;
+	const char *device_file = NULL;
 	long bo_size = 65536;
 	bool test_pattern = true;
 	bool export_to_fd = true;
@@ -174,19 +171,19 @@ int main(int argc, char * argv[])
 	int c;
 	while ((c = getopt(argc, argv, optstr)) != -1) {
 		switch (c) {
-		case 'h':
-			print_help(argv[0]);
-			exit(0);
-			break;
-		case 'd':
-			device_file = optarg;
-			break;
-		case 'c':
-			bo_size = atol(optarg);
-			break;
-		default:
-			print_help(argv[0]);
-			return 1;
+			case 'h':
+				print_help(argv[0]);
+				exit(0);
+				break;
+			case 'd':
+				device_file = optarg;
+				break;
+			case 'c':
+				bo_size = atol(optarg);
+				break;
+			default:
+				print_help(argv[0]);
+				return 1;
 		}
 	}
 
@@ -205,26 +202,24 @@ int main(int argc, char * argv[])
 
 	uint32_t bo_handle;
 	if (bo_size > 0) {
-
 		ret = create_vgem_bo(vgem_fd, bo_size, &bo_handle);
 		if (ret) {
 			fprintf(stderr, FAIL_COLOR " to create bo: %d\n", ret);
 			ret = 1;
 			goto close_vgem_fd;
 		}
-		printf(SUCCESS_COLOR("created") " vgem buffer object, handle = %u\n",
-			bo_handle);
+		printf(SUCCESS_COLOR("created") " vgem buffer object, handle = %u\n", bo_handle);
 	}
 
 	if (test_pattern) {
 		if (bo_size <= 0) {
-			fprintf(stderr, "buffer object must be created before it can be written to\n");
+			fprintf(stderr,
+				"buffer object must be created before it can be written to\n");
 			ret = 1;
 			goto close_vgem_fd;
 		}
 
-		volatile uint32_t * bo_ptr = mmap_dumb_bo(vgem_fd, bo_handle,
-							  bo_size);
+		volatile uint32_t *bo_ptr = mmap_dumb_bo(vgem_fd, bo_handle, bo_size);
 		if (bo_ptr == MAP_FAILED) {
 			fprintf(stderr, FAIL_COLOR " to map buffer object\n");
 			ret = 1;
@@ -241,8 +236,7 @@ int main(int argc, char * argv[])
 
 		bo_ptr = mmap_dumb_bo(vgem_fd, bo_handle, bo_size);
 
-		if (!verify_pattern(bo_ptr, bo_size))
-		{
+		if (!verify_pattern(bo_ptr, bo_size)) {
 			ret = 1;
 			goto close_vgem_fd;
 		}
@@ -260,17 +254,14 @@ int main(int argc, char * argv[])
 			goto close_vgem_fd;
 		}
 
-		ret = drmPrimeHandleToFD(vgem_fd, bo_handle, O_CLOEXEC,
-					 &prime_fd);
+		ret = drmPrimeHandleToFD(vgem_fd, bo_handle, O_CLOEXEC, &prime_fd);
 		if (ret) {
-			fprintf(stderr, FAIL_COLOR " to export buffer object: %d\n",
-				ret);
+			fprintf(stderr, FAIL_COLOR " to export buffer object: %d\n", ret);
 			ret = 1;
 			goto close_vgem_fd;
 		}
 
-		printf(SUCCESS_COLOR("exported") " vgem buffer object, fd = %d\n",
-			prime_fd);
+		printf(SUCCESS_COLOR("exported") " vgem buffer object, fd = %d\n", prime_fd);
 	}
 
 	uint32_t imported_handle;
@@ -283,18 +274,15 @@ int main(int argc, char * argv[])
 
 		ret = drmPrimeFDToHandle(vgem_fd, prime_fd, &imported_handle);
 		if (ret) {
-			fprintf(stderr, FAIL_COLOR " to import buffer object: %d\n",
-				ret);
+			fprintf(stderr, FAIL_COLOR " to import buffer object: %d\n", ret);
 			ret = 1;
 			goto close_vgem_fd;
 		}
 
 		printf(SUCCESS_COLOR("imported") " to vgem buffer object, handle = %d\n",
-			imported_handle);
+		       imported_handle);
 
-		volatile uint32_t * bo_ptr = mmap_dumb_bo(vgem_fd,
-			                                  imported_handle,
-			                                  bo_size);
+		volatile uint32_t *bo_ptr = mmap_dumb_bo(vgem_fd, imported_handle, bo_size);
 		if (bo_ptr == MAP_FAILED) {
 			fprintf(stderr, FAIL_COLOR " to map imported buffer object\n");
 			ret = 1;
@@ -303,8 +291,7 @@ int main(int argc, char * argv[])
 
 		printf(SUCCESS_COLOR("mapped") " imported vgem buffer object\n");
 
-		if (!verify_pattern(bo_ptr, bo_size))
-		{
+		if (!verify_pattern(bo_ptr, bo_size)) {
 			ret = 1;
 			goto close_vgem_fd;
 		}
@@ -333,46 +320,40 @@ int main(int argc, char * argv[])
 
 		ret = drmIoctl(dumb_fd, DRM_IOCTL_MODE_CREATE_DUMB, &create);
 		if (ret) {
-			fprintf(stderr, FAIL_COLOR " to create non-vgem buffer object: %d\n",
-				ret);
+			fprintf(stderr, FAIL_COLOR " to create non-vgem buffer object: %d\n", ret);
 			ret = 1;
 			goto close_dumb_fd;
 		}
 
 		printf(SUCCESS_COLOR("created") " non-vgem buffer object, handle = %u\n",
-			create.handle);
+		       create.handle);
 
 		assert(create.size == create.width * create.height * 4);
 
 		int foreign_prime_fd;
-		ret = drmPrimeHandleToFD(dumb_fd, create.handle, O_CLOEXEC,
-					 &foreign_prime_fd);
+		ret = drmPrimeHandleToFD(dumb_fd, create.handle, O_CLOEXEC, &foreign_prime_fd);
 		if (ret) {
-			fprintf(stderr, FAIL_COLOR " to export non-vgem buffer object: %d\n",
-				ret);
+			fprintf(stderr, FAIL_COLOR " to export non-vgem buffer object: %d\n", ret);
 			ret = 1;
 			goto close_dumb_fd;
 		}
 
 		printf(SUCCESS_COLOR("exported") " non-vgem buffer object, fd = %d\n",
-			foreign_prime_fd);
+		       foreign_prime_fd);
 
 		uint32_t foreign_imported_handle;
-		ret = drmPrimeFDToHandle(vgem_fd, foreign_prime_fd,
-					 &foreign_imported_handle);
+		ret = drmPrimeFDToHandle(vgem_fd, foreign_prime_fd, &foreign_imported_handle);
 		if (ret) {
-			fprintf(stderr, FAIL_COLOR " to import non-vgem buffer object: %d\n",
-				ret);
+			fprintf(stderr, FAIL_COLOR " to import non-vgem buffer object: %d\n", ret);
 			ret = 1;
 			goto close_vgem_fd;
 		}
 
 		printf(SUCCESS_COLOR("imported") " to vgem buffer object, handle = %d\n",
-			foreign_imported_handle);
+		       foreign_imported_handle);
 
-		volatile uint32_t * bo_ptr =
-			mmap_dumb_bo(vgem_fd, foreign_imported_handle,
-				     create.size);
+		volatile uint32_t *bo_ptr =
+		    mmap_dumb_bo(vgem_fd, foreign_imported_handle, create.size);
 		if (bo_ptr == MAP_FAILED) {
 			fprintf(stderr, FAIL_COLOR " to map imported non-vgem buffer object\n");
 			ret = 1;
@@ -387,16 +368,14 @@ int main(int argc, char * argv[])
 
 		printf(SUCCESS_COLOR("wrote") " to non-vgem buffer object\n");
 
-		bo_ptr = mmap_dumb_bo(vgem_fd, foreign_imported_handle,
-				      create.size);
+		bo_ptr = mmap_dumb_bo(vgem_fd, foreign_imported_handle, create.size);
 		if (bo_ptr == MAP_FAILED) {
 			fprintf(stderr, FAIL_COLOR " to map imported non-vgem buffer object\n");
 			ret = 1;
 			goto close_vgem_fd;
 		}
 
-		if (!verify_pattern(bo_ptr, create.size))
-		{
+		if (!verify_pattern(bo_ptr, create.size)) {
 			ret = 1;
 			goto close_vgem_fd;
 		}
@@ -412,8 +391,7 @@ int main(int argc, char * argv[])
 			goto close_vgem_fd;
 		}
 
-		if (!verify_pattern(bo_ptr, create.size))
-		{
+		if (!verify_pattern(bo_ptr, create.size)) {
 			ret = 1;
 			goto close_vgem_fd;
 		}

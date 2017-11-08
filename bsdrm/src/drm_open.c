@@ -95,7 +95,7 @@ static uint32_t display_rank(int fd)
 		uint32_t rank = display_rank_connector_type(connector->connector_type);
 		if (best_rank > rank)
 			best_rank = rank;
-                drmModeFreeConnector(connector);
+		drmModeFreeConnector(connector);
 	}
 
 out:

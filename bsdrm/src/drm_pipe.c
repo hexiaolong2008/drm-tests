@@ -195,8 +195,7 @@ bool bs_drm_pipe_plumber_make(struct bs_drm_pipe_plumber *self, struct bs_drm_pi
 			return false;
 		connector_count += fd_res[0]->count_connectors;
 		fd_count++;
-	}
-	else {
+	} else {
 		for (int fd_index = 0; fd_index < DRM_MAX_MINOR; fd_index++) {
 			char *file_path = NULL;
 			int ret = asprintf(&file_path, "/dev/dri/card%d", fd_index);

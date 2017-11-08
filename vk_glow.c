@@ -47,29 +47,25 @@ struct frame {
 #define check_vk_success(result, vk_func) \
 	__check_vk_success(__FILE__, __LINE__, __func__, (result), (vk_func))
 
-static void
-__check_vk_success(const char *file, int line, const char *func,
-		   VkResult result, const char *vk_func)
+static void __check_vk_success(const char *file, int line, const char *func, VkResult result,
+			       const char *vk_func)
 {
 	if (result == VK_SUCCESS)
 		return;
 
-	bs_debug_print("ERROR", func, file, line,
-		       "%s failed with VkResult(%d)", vk_func, result);
+	bs_debug_print("ERROR", func, file, line, "%s failed with VkResult(%d)", vk_func, result);
 	exit(EXIT_FAILURE);
 }
 
-static void
-page_flip_handler(int fd, unsigned int frame, unsigned int sec,
-		  unsigned int usec, void *data)
+static void page_flip_handler(int fd, unsigned int frame, unsigned int sec, unsigned int usec,
+			      void *data)
 {
 	bool *waiting_for_flip = data;
 	*waiting_for_flip = false;
 }
 
 // Choose the first physical device. Exit on failure.
-VkPhysicalDevice
-choose_physical_device(VkInstance inst)
+VkPhysicalDevice choose_physical_device(VkInstance inst)
 {
 	uint32_t n_phys_devs;
 	VkResult res;
@@ -96,31 +92,21 @@ choose_physical_device(VkInstance inst)
 		vkGetPhysicalDeviceProperties(phys_devs[i], &props);
 
 		printf("    VkPhysicalDevice %u:\n", i);
-		printf("	apiVersion: %u.%u.%u\n",
-		       VK_VERSION_MAJOR(props.apiVersion),
-		       VK_VERSION_MINOR(props.apiVersion),
-		       VK_VERSION_PATCH(props.apiVersion));
+		printf("	apiVersion: %u.%u.%u\n", VK_VERSION_MAJOR(props.apiVersion),
+		       VK_VERSION_MINOR(props.apiVersion), VK_VERSION_PATCH(props.apiVersion));
 		printf("	driverVersion: %u\n", props.driverVersion);
 		printf("	vendorID: 0x%x\n", props.vendorID);
 		printf("	deviceID: 0x%x\n", props.deviceID);
 		printf("	deviceName: %s\n", props.deviceName);
 		printf("	pipelineCacheUUID: %x%x%x%x-%x%x-%x%x-%x%x-%x%x%x%x%x%x\n",
-		       props.pipelineCacheUUID[0],
-		       props.pipelineCacheUUID[1],
-		       props.pipelineCacheUUID[2],
-		       props.pipelineCacheUUID[3],
-		       props.pipelineCacheUUID[4],
-		       props.pipelineCacheUUID[5],
-		       props.pipelineCacheUUID[6],
-		       props.pipelineCacheUUID[7],
-		       props.pipelineCacheUUID[8],
-		       props.pipelineCacheUUID[9],
-		       props.pipelineCacheUUID[10],
-		       props.pipelineCacheUUID[11],
-		       props.pipelineCacheUUID[12],
-		       props.pipelineCacheUUID[13],
-		       props.pipelineCacheUUID[14],
-		       props.pipelineCacheUUID[15]);
+		       props.pipelineCacheUUID[0], props.pipelineCacheUUID[1],
+		       props.pipelineCacheUUID[2], props.pipelineCacheUUID[3],
+		       props.pipelineCacheUUID[4], props.pipelineCacheUUID[5],
+		       props.pipelineCacheUUID[6], props.pipelineCacheUUID[7],
+		       props.pipelineCacheUUID[8], props.pipelineCacheUUID[9],
+		       props.pipelineCacheUUID[10], props.pipelineCacheUUID[11],
+		       props.pipelineCacheUUID[12], props.pipelineCacheUUID[13],
+		       props.pipelineCacheUUID[14], props.pipelineCacheUUID[15]);
 	}
 
 	printf("Chose VkPhysicalDevice 0\n");
@@ -131,8 +117,7 @@ choose_physical_device(VkInstance inst)
 
 // Return the index of a graphics-enabled queue family. Return UINT32_MAX on
 // failure.
-uint32_t
-choose_gfx_queue_family(VkPhysicalDevice phys_dev)
+uint32_t choose_gfx_queue_family(VkPhysicalDevice phys_dev)
 {
 	uint32_t family_idx = UINT32_MAX;
 	VkQueueFamilyProperties *props = NULL;
@@ -150,8 +135,7 @@ choose_gfx_queue_family(VkPhysicalDevice phys_dev)
 
 	// Choose the first graphics queue.
 	for (uint32_t i = 0; i < n_props; ++i) {
-		if ((props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
-		    props[i].queueCount > 0) {
+		if ((props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && props[i].queueCount > 0) {
 			family_idx = i;
 			break;
 		}
@@ -161,8 +145,7 @@ choose_gfx_queue_family(VkPhysicalDevice phys_dev)
 	return family_idx;
 }
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	VkInstance inst;
 	VkPhysicalDevice phys_dev;
@@ -202,47 +185,48 @@ main(int argc, char **argv)
 	drmModeModeInfo *mode = &connector->modes[0];
 
 	res = vkCreateInstance(
-		&(VkInstanceCreateInfo) {
-			.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-			.pApplicationInfo = &(VkApplicationInfo) {
-				.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-				.apiVersion = VK_MAKE_VERSION(1, 0, 0),
-			},
-		},
-		/*pAllocator*/ NULL,
-		&inst);
+	    &(VkInstanceCreateInfo){
+		.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+		.pApplicationInfo =
+		    &(VkApplicationInfo){
+			.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+			.apiVersion = VK_MAKE_VERSION(1, 0, 0),
+		    },
+	    },
+	    /*pAllocator*/ NULL, &inst);
 	check_vk_success(res, "vkCreateInstance");
 
 	phys_dev = choose_physical_device(inst);
 
 	gfx_queue_family_idx = choose_gfx_queue_family(phys_dev);
 	if (gfx_queue_family_idx == UINT32_MAX) {
-	    bs_debug_error("VkPhysicalDevice exposes no VkQueueFamilyProperties "
-			   "with graphics");
-	    exit(EXIT_FAILURE);
+		bs_debug_error(
+		    "VkPhysicalDevice exposes no VkQueueFamilyProperties "
+		    "with graphics");
+		exit(EXIT_FAILURE);
 	}
 
 	res = vkCreateDevice(phys_dev,
-		&(VkDeviceCreateInfo) {
-			.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-			.queueCreateInfoCount = 1,
-			.pQueueCreateInfos = (VkDeviceQueueCreateInfo[]) {
-				{
-					.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-					.queueFamilyIndex = gfx_queue_family_idx,
-					.queueCount = 1,
-					.pQueuePriorities = (float[]) { 1.0f },
+			     &(VkDeviceCreateInfo){
+				 .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+				 .queueCreateInfoCount = 1,
+				 .pQueueCreateInfos =
+				     (VkDeviceQueueCreateInfo[]){
+					 {
+					     .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+					     .queueFamilyIndex = gfx_queue_family_idx,
+					     .queueCount = 1,
+					     .pQueuePriorities = (float[]){ 1.0f },
 
-				},
-			},
-		},
-		/*pAllocator*/ NULL,
-		&dev);
+					 },
+				     },
+			     },
+			     /*pAllocator*/ NULL, &dev);
 	check_vk_success(res, "vkCreateDevice");
 
 #if USE_vkCreateDmaBufImageINTEL
 	PFN_vkCreateDmaBufImageINTEL bs_vkCreateDmaBufImageINTEL =
-		(void *) vkGetDeviceProcAddr(dev, "vkCreateDmaBufImageINTEL");
+	    (void *)vkGetDeviceProcAddr(dev, "vkCreateDmaBufImageINTEL");
 	if (bs_vkCreateDmaBufImageINTEL == NULL) {
 		bs_debug_error("vkGetDeviceProcAddr(\"vkCreateDmaBufImageINTEL\') failed");
 		exit(EXIT_FAILURE);
@@ -252,55 +236,55 @@ main(int argc, char **argv)
 	vkGetDeviceQueue(dev, gfx_queue_family_idx, /*queueIndex*/ 0, &gfx_queue);
 
 	res = vkCreateCommandPool(dev,
-		&(VkCommandPoolCreateInfo) {
-			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-			.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT |
-				 VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-			.queueFamilyIndex = gfx_queue_family_idx,
-		},
-		/*pAllocator*/ NULL,
-		&cmd_pool);
+				  &(VkCommandPoolCreateInfo){
+				      .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+				      .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT |
+					       VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+				      .queueFamilyIndex = gfx_queue_family_idx,
+				  },
+				  /*pAllocator*/ NULL, &cmd_pool);
 	check_vk_success(res, "vkCreateCommandPool");
 
-	res = vkCreateRenderPass(dev,
-		&(VkRenderPassCreateInfo) {
-			.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-			.attachmentCount = 1,
-			.pAttachments = (VkAttachmentDescription[]) {
-				{
-					.format = VK_FORMAT_A8B8G8R8_UNORM_PACK32,
-					.samples = 1,
-					.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-					.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-					.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-					.finalLayout = VK_IMAGE_LAYOUT_GENERAL,
+	res = vkCreateRenderPass(
+	    dev,
+	    &(VkRenderPassCreateInfo){
+		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+		.attachmentCount = 1,
+		.pAttachments =
+		    (VkAttachmentDescription[]){
+			{
+			    .format = VK_FORMAT_A8B8G8R8_UNORM_PACK32,
+			    .samples = 1,
+			    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+			    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+			    .finalLayout = VK_IMAGE_LAYOUT_GENERAL,
+			},
+		    },
+		.subpassCount = 1,
+		.pSubpasses =
+		    (VkSubpassDescription[]){
+			{
+			    .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+			    .colorAttachmentCount = 1,
+			    .pColorAttachments =
+				(VkAttachmentReference[]){
+				    {
+					.attachment = 0,
+					.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				    },
 				},
 			},
-			.subpassCount = 1,
-			.pSubpasses = (VkSubpassDescription[]) {
-				{
-					.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-					.colorAttachmentCount = 1,
-					.pColorAttachments = (VkAttachmentReference[]) {
-						{
-							.attachment = 0,
-							.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-						},
-					},
-				},
-			},
-		},
-		/*pAllocator*/ NULL,
-		&pass);
+		    },
+	    },
+	    /*pAllocator*/ NULL, &pass);
 	check_vk_success(res, "vkCreateRenderPass");
 
 	for (int i = 0; i < BS_ARRAY_LEN(frames); ++i) {
 		struct frame *fr = &frames[i];
 
-		fr->bo = gbm_bo_create(gbm, mode->hdisplay, mode->vdisplay,
-					  GBM_FORMAT_XBGR8888,
-					  GBM_BO_USE_SCANOUT |
-					  GBM_BO_USE_RENDERING);
+		fr->bo = gbm_bo_create(gbm, mode->hdisplay, mode->vdisplay, GBM_FORMAT_XBGR8888,
+				       GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
 		if (fr->bo == NULL) {
 			bs_debug_error("failed to create framebuffer's gbm_bo");
 			return 1;
@@ -319,53 +303,50 @@ main(int argc, char **argv)
 		}
 
 #if USE_vkCreateDmaBufImageINTEL
-		res = bs_vkCreateDmaBufImageINTEL(dev,
-			&(VkDmaBufImageCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_CREATE_INFO_INTEL,
-				.fd = fr->bo_prime_fd,
-				.format = VK_FORMAT_A8B8G8R8_UNORM_PACK32,
-				.extent = (VkExtent3D) { mode->hdisplay, mode->hdisplay, 1 },
-				.strideInBytes = gbm_bo_get_stride(fr->bo),
-			},
-			/*pAllocator*/ NULL,
-			&fr->vk_memory,
-			&fr->vk_image);
+		res = bs_vkCreateDmaBufImageINTEL(
+		    dev,
+		    &(VkDmaBufImageCreateInfo){
+			.sType = VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_CREATE_INFO_INTEL,
+			.fd = fr->bo_prime_fd,
+			.format = VK_FORMAT_A8B8G8R8_UNORM_PACK32,
+			.extent = (VkExtent3D){ mode->hdisplay, mode->hdisplay, 1 },
+			.strideInBytes = gbm_bo_get_stride(fr->bo),
+		    },
+		    /*pAllocator*/ NULL, &fr->vk_memory, &fr->vk_image);
 		check_vk_success(res, "vkCreateDmaBufImageINTEL");
 #else
 		res = vkCreateImage(dev,
-			&(VkImageCreateInfo) {
-			    .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			    .imageType = VK_IMAGE_TYPE_2D,
-			    .format = VK_FORMAT_A8B8G8R8_UNORM_PACK32,
-			    .extent = (VkExtent3D) { mode->hdisplay, mode->hdisplay, 1 },
-			    .mipLevels = 1,
-			    .arrayLayers = 1,
-			    .samples = 1,
-			    .tiling = VK_IMAGE_TILING_LINEAR,
-			    .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-			    .queueFamilyIndexCount = 1,
-			    .pQueueFamilyIndices = (uint32_t[]) { gfx_queue_family_idx },
-			    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-			},
-			/*pAllocator*/ NULL,
-			&fr->vk_image);
+				    &(VkImageCreateInfo){
+					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+					.imageType = VK_IMAGE_TYPE_2D,
+					.format = VK_FORMAT_A8B8G8R8_UNORM_PACK32,
+					.extent = (VkExtent3D){ mode->hdisplay, mode->hdisplay, 1 },
+					.mipLevels = 1,
+					.arrayLayers = 1,
+					.samples = 1,
+					.tiling = VK_IMAGE_TILING_LINEAR,
+					.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+					.queueFamilyIndexCount = 1,
+					.pQueueFamilyIndices = (uint32_t[]){ gfx_queue_family_idx },
+					.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				    },
+				    /*pAllocator*/ NULL, &fr->vk_image);
 		check_vk_success(res, "vkCreateImage");
 
 		VkMemoryRequirements mem_reqs;
 		vkGetImageMemoryRequirements(dev, fr->vk_image, &mem_reqs);
 
 		res = vkAllocateMemory(dev,
-			&(VkMemoryAllocateInfo) {
-			    .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-			    .allocationSize = mem_reqs.size,
+				       &(VkMemoryAllocateInfo){
+					   .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+					   .allocationSize = mem_reqs.size,
 
-			    // Simply choose the first available memory type.
-			    // We need neither performance nor mmap, so all
-			    // memory types are equally good.
-			    .memoryTypeIndex = ffs(mem_reqs.memoryTypeBits) - 1,
-			},
-			/*pAllocator*/ NULL,
-			&fr->vk_image_memory);
+					   // Simply choose the first available memory type.
+					   // We need neither performance nor mmap, so all
+					   // memory types are equally good.
+					   .memoryTypeIndex = ffs(mem_reqs.memoryTypeBits) - 1,
+				       },
+				       /*pAllocator*/ NULL, &fr->vk_image_memory);
 		check_vk_success(res, "vkAllocateMemory");
 
 		res = vkBindImageMemory(dev, fr->vk_image, fr->vk_image_memory,
@@ -374,59 +355,59 @@ main(int argc, char **argv)
 #endif
 
 		res = vkCreateImageView(dev,
-			&(VkImageViewCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-				.image = fr->vk_image,
-				.viewType = VK_IMAGE_VIEW_TYPE_2D,
-				.format = VK_FORMAT_A8B8G8R8_UNORM_PACK32,
-				.components = (VkComponentMapping) {
-					.r = VK_COMPONENT_SWIZZLE_IDENTITY,
-					.b = VK_COMPONENT_SWIZZLE_IDENTITY,
-					.g = VK_COMPONENT_SWIZZLE_IDENTITY,
-					.a = VK_COMPONENT_SWIZZLE_IDENTITY,
-				},
-				.subresourceRange = (VkImageSubresourceRange) {
-					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					.baseMipLevel = 0,
-					.levelCount = 1,
-					.baseArrayLayer = 0,
-					.layerCount = 1,
-				},
-			},
-			/*pAllocator*/ NULL,
-			&fr->vk_image_view);
+					&(VkImageViewCreateInfo){
+					    .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+					    .image = fr->vk_image,
+					    .viewType = VK_IMAGE_VIEW_TYPE_2D,
+					    .format = VK_FORMAT_A8B8G8R8_UNORM_PACK32,
+					    .components =
+						(VkComponentMapping){
+						    .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+						    .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+						    .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+						    .a = VK_COMPONENT_SWIZZLE_IDENTITY,
+						},
+					    .subresourceRange =
+						(VkImageSubresourceRange){
+						    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+						    .baseMipLevel = 0,
+						    .levelCount = 1,
+						    .baseArrayLayer = 0,
+						    .layerCount = 1,
+						},
+					},
+					/*pAllocator*/ NULL, &fr->vk_image_view);
 		check_vk_success(res, "vkCreateImageView");
 
 		res = vkCreateFramebuffer(dev,
-			&(VkFramebufferCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-				.renderPass = pass,
-				.attachmentCount = 1,
-				.pAttachments = (VkImageView[]) { fr->vk_image_view },
-				.width = mode->hdisplay,
-				.height = mode->vdisplay,
-				.layers = 1,
-			},
-			/*pAllocator*/ NULL,
-			&fr->vk_framebuffer);
+					  &(VkFramebufferCreateInfo){
+					      .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+					      .renderPass = pass,
+					      .attachmentCount = 1,
+					      .pAttachments = (VkImageView[]){ fr->vk_image_view },
+					      .width = mode->hdisplay,
+					      .height = mode->vdisplay,
+					      .layers = 1,
+					  },
+					  /*pAllocator*/ NULL, &fr->vk_framebuffer);
 		check_vk_success(res, "vkCreateFramebuffer");
 
-		res = vkAllocateCommandBuffers(dev,
-			&(VkCommandBufferAllocateInfo) {
-				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-				.commandPool = cmd_pool,
-				.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-				.commandBufferCount = 1,
-			},
-			&fr->vk_cmd_buf);
+		res = vkAllocateCommandBuffers(
+		    dev,
+		    &(VkCommandBufferAllocateInfo){
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+			.commandPool = cmd_pool,
+			.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+			.commandBufferCount = 1,
+		    },
+		    &fr->vk_cmd_buf);
 		check_vk_success(res, "vkAllocateCommandBuffers");
 	}
 
 	// We set the screen mode using framebuffer 0. Then the first page flip
 	// waits on framebuffer 1.
 	err = drmModeSetCrtc(dev_fd, pipe.crtc_id, frames[0].drm_fb_id,
-			     /*x*/ 0, /*y*/ 0,
-			     &pipe.connector_id, /*connector_count*/ 1, mode);
+			     /*x*/ 0, /*y*/ 0, &pipe.connector_id, /*connector_count*/ 1, mode);
 	if (err) {
 		bs_debug_error("drmModeSetCrtc failed: %d", err);
 		exit(EXIT_FAILURE);
@@ -440,60 +421,65 @@ main(int argc, char **argv)
 		// vkBeginCommandBuffer implicity resets the command buffer due
 		// to VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT.
 		res = vkBeginCommandBuffer(fr->vk_cmd_buf,
-			&(VkCommandBufferBeginInfo) {
-				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-				.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-			});
+					   &(VkCommandBufferBeginInfo){
+					       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+					       .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+					   });
 		check_vk_success(res, "vkBeginCommandBuffer");
 
 		// Cycle along the circumference of the RGB color wheel.
 		VkClearValue clear_color = {
-			.color = {
-				.float32 = {
-					0.5f + 0.5f * sinf(2*M_PI * i / 240.0f),
-					0.5f + 0.5f * sinf(2*M_PI * i / 240.0f + (2.0f/3.0f * M_PI)),
-					0.5f + 0.5f * sinf(2*M_PI * i / 240.0f + (4.0f/3.0f * M_PI)),
+			.color =
+			    {
+				.float32 =
+				    {
+					0.5f + 0.5f * sinf(2 * M_PI * i / 240.0f),
+					0.5f + 0.5f * sinf(2 * M_PI * i / 240.0f +
+							   (2.0f / 3.0f * M_PI)),
+					0.5f + 0.5f * sinf(2 * M_PI * i / 240.0f +
+							   (4.0f / 3.0f * M_PI)),
 					1.0f,
-				},
-			},
+				    },
+			    },
 		};
 
-		vkCmdBeginRenderPass(fr->vk_cmd_buf,
-			&(VkRenderPassBeginInfo) {
-				.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-				.renderPass = pass,
-				.framebuffer = fr->vk_framebuffer,
-				.renderArea = (VkRect2D) {
-					.offset = { 0, 0 },
-					.extent = { mode->hdisplay, mode->vdisplay },
-				},
-				.clearValueCount = 1,
-				.pClearValues = (VkClearValue[]) { clear_color },
-			},
-			VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBeginRenderPass(
+		    fr->vk_cmd_buf,
+		    &(VkRenderPassBeginInfo){
+			.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+			.renderPass = pass,
+			.framebuffer = fr->vk_framebuffer,
+			.renderArea =
+			    (VkRect2D){
+				.offset = { 0, 0 }, .extent = { mode->hdisplay, mode->vdisplay },
+			    },
+			.clearValueCount = 1,
+			.pClearValues = (VkClearValue[]){ clear_color },
+		    },
+		    VK_SUBPASS_CONTENTS_INLINE);
 		vkCmdEndRenderPass(fr->vk_cmd_buf);
 
 		res = vkEndCommandBuffer(fr->vk_cmd_buf);
 		check_vk_success(res, "vkEndCommandBuffer");
 
-		res = vkQueueSubmit(gfx_queue,
-			/*submitCount*/ 1,
-			(VkSubmitInfo[]) {
-				{
-					.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-					.commandBufferCount = 1,
-					.pCommandBuffers = (VkCommandBuffer[]) { fr->vk_cmd_buf },
-				},
-			},
-			VK_NULL_HANDLE);
+		res =
+		    vkQueueSubmit(gfx_queue,
+				  /*submitCount*/ 1,
+				  (VkSubmitInfo[]){
+				      {
+					  .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+					  .commandBufferCount = 1,
+					  .pCommandBuffers = (VkCommandBuffer[]){ fr->vk_cmd_buf },
+				      },
+				  },
+				  VK_NULL_HANDLE);
 		check_vk_success(res, "vkQueueSubmit");
 
 		res = vkQueueWaitIdle(gfx_queue);
 		check_vk_success(res, "vkQueueWaitIdle");
 
 		bool waiting_for_flip = true;
-		err = drmModePageFlip(dev_fd, pipe.crtc_id, fr->drm_fb_id,
-				      DRM_MODE_PAGE_FLIP_EVENT,
+		err = drmModePageFlip(dev_fd, pipe.crtc_id, fr->drm_fb_id, DRM_MODE_PAGE_FLIP_EVENT,
 				      &waiting_for_flip);
 		if (err) {
 			bs_debug_error("failed page flip: error=%d", err);
@@ -521,9 +507,10 @@ main(int argc, char **argv)
 
 			err = drmHandleEvent(dev_fd, &ev_ctx);
 			if (err) {
-				bs_debug_error("drmHandleEvent failed while "
-					       "waiting for page flip: error=%d",
-					       err);
+				bs_debug_error(
+				    "drmHandleEvent failed while "
+				    "waiting for page flip: error=%d",
+				    err);
 				exit(EXIT_FAILURE);
 			}
 		}

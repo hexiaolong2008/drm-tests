@@ -11,10 +11,7 @@
 #define NUM_BUFFERS 2
 
 static uint32_t allowed_formats[] = {
-	GBM_FORMAT_XRGB8888,
-	GBM_FORMAT_XBGR8888,
-	GBM_FORMAT_XRGB2101010,
-	GBM_FORMAT_XBGR2101010,
+	GBM_FORMAT_XRGB8888, GBM_FORMAT_XBGR8888, GBM_FORMAT_XRGB2101010, GBM_FORMAT_XBGR2101010,
 };
 
 const size_t allowed_formats_length = BS_ARRAY_LEN(allowed_formats);
@@ -38,9 +35,7 @@ static GLuint solid_shader_create()
 	    "}\n";
 
 	struct bs_gl_program_create_binding bindings[] = {
-		{ 0, "vPosition" },
-		{ 1, "vColor" },
-		{ 0, NULL },
+		{ 0, "vPosition" }, { 1, "vColor" }, { 0, NULL },
 	};
 
 	return bs_gl_program_create_vert_frag_bind(vert, frag, bindings);

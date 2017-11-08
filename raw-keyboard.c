@@ -20,12 +20,13 @@
  * IN THE SOFTWARE.
  */
 
+#include <X11/extensions/XKBcommon.h>
+#include <linux/input.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <linux/input.h>
-#include <X11/extensions/XKBcommon.h>
 
-struct xkb_desc  *create_xkb(void) {
+struct xkb_desc *create_xkb(void)
+{
 	struct xkb_rule_names names;
 
 	names.rules = "evdev";
@@ -37,16 +38,13 @@ struct xkb_desc  *create_xkb(void) {
 	return xkb_compile_keymap_from_rules(&names);
 }
 
-void handle_key(struct xkb_desc *xkb,
-		struct input_event *evp,
-		uint32_t *modifiers)
+void handle_key(struct xkb_desc *xkb, struct input_event *evp, uint32_t *modifiers)
 {
 	uint32_t code = evp->code + xkb->min_key_code;
 	uint32_t level = 0;
 	uint32_t sym;
 
-	if ((*modifiers & XKB_COMMON_SHIFT_MASK) &&
-	    XkbKeyGroupWidth(xkb, code, 0) > 1)
+	if ((*modifiers & XKB_COMMON_SHIFT_MASK) && XkbKeyGroupWidth(xkb, code, 0) > 1)
 		level = 1;
 
 	sym = XkbKeySymEntry(xkb, code, level, 0);
@@ -56,9 +54,8 @@ void handle_key(struct xkb_desc *xkb,
 	else
 		*modifiers &= xkb->map->modmap[code];
 
-	printf("Code: %d, Sym: %d, Modifiers: %d, Ascii: %c, State: %s\n",
-	       evp->code, sym, *modifiers, sym,
-	       evp->value ? "up" : "down");
+	printf("Code: %d, Sym: %d, Modifiers: %d, Ascii: %c, State: %s\n", evp->code, sym,
+	       *modifiers, sym, evp->value ? "up" : "down");
 }
 
 int main(int argc, char *argv[])
