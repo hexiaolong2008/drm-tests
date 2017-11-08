@@ -208,19 +208,22 @@ int main(int argc, char **argv)
 	}
 
 	int c;
-	uint32_t flags = GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR;
+	uint32_t flags = GBM_BO_USE_SCANOUT;
 	while ((c = getopt_long(argc, argv, "bgdvsh", longopts, NULL)) != -1) {
 		switch (c) {
 			case 'b':
 				ctx.mapper = bs_mapper_dma_buf_new();
+				flags |= GBM_BO_USE_LINEAR;
 				printf("started dma-buf mmap.\n");
 				break;
 			case 'g':
 				ctx.mapper = bs_mapper_gem_new();
+				flags |= GBM_BO_USE_SW_READ_OFTEN | GBM_BO_USE_SW_WRITE_OFTEN;
 				printf("started GEM map.\n");
 				break;
 			case 'd':
 				ctx.mapper = bs_mapper_dumb_new(gbm_device_get_fd(gbm));
+				flags |= GBM_BO_USE_LINEAR;
 				printf("started dumb map.\n");
 				break;
 			case 'v':

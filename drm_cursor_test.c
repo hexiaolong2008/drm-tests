@@ -54,7 +54,7 @@ int main(int argc, char **argv)
 
 	struct gbm_bo *fb_bo =
 	    gbm_bo_create(gbm, mode->hdisplay, mode->vdisplay, GBM_FORMAT_XRGB8888,
-			  GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR);
+			  GBM_BO_USE_SCANOUT | GBM_BO_USE_SW_WRITE_RARELY);
 	if (!fb_bo) {
 		bs_debug_error("failed to create buffer object for frame buffer");
 		return 1;
@@ -97,8 +97,8 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	struct gbm_bo *cursor_bo =
-	    gbm_bo_create(gbm, cursor_size, cursor_size, GBM_FORMAT_ARGB8888, GBM_BO_USE_CURSOR);
+	struct gbm_bo *cursor_bo = gbm_bo_create(gbm, cursor_size, cursor_size, GBM_FORMAT_ARGB8888,
+						 GBM_BO_USE_CURSOR | GBM_BO_USE_SW_WRITE_RARELY);
 	if (!cursor_bo) {
 		bs_debug_error("failed to create cursor buffer object");
 		return 1;

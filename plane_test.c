@@ -411,7 +411,7 @@ int main(int argc, char **argv)
 	}
 
 	struct gbm_bo *bg_bo = gbm_bo_create(gbm, mode.hdisplay, mode.vdisplay, GBM_FORMAT_XRGB8888,
-					     GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR);
+					     GBM_BO_USE_SCANOUT | GBM_BO_USE_SW_WRITE_RARELY);
 	if (!bg_bo) {
 		bs_debug_error("failed to create background buffer ojbect");
 		return 1;
@@ -482,7 +482,7 @@ int main(int argc, char **argv)
 		printf("Creating buffer %ux%u %s\n", tp->bo_w, tp->bo_h,
 		       bs_get_format_name(tp->format));
 		tp->bo = gbm_bo_create(gbm, tp->bo_w, tp->bo_h, bs_get_pixel_format(tp->format),
-				       GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR);
+				       GBM_BO_USE_SCANOUT | GBM_BO_USE_SW_WRITE_RARELY);
 		if (!tp->bo) {
 			bs_debug_error("failed to create buffer object");
 			return 1;

@@ -219,7 +219,6 @@ static void print_help(const char *argv0)
 	printf(" -b, --dma-buf  Use dma-buf mmap.\n");
 	printf(" -g, --gem      Use GEM map(by default).\n");
 	printf(" -d, --dumb     Use dump map.\n");
-	printf(" -t, --tiled    Use potentially tiled buffer.\n");
 }
 
 static void page_flip_handler(int fd, unsigned int frame, unsigned int sec, unsigned int usec,
@@ -249,10 +248,10 @@ int main(int argc, char **argv)
 	struct offscreen_buffer buffer;
 	buffer.draw_format = bs_get_draw_format_from_name("ARGB8888");
 	struct bs_mapper *mapper = NULL;
-	uint32_t flags = GBM_BO_USE_TEXTURING | GBM_BO_USE_LINEAR;
+	uint32_t flags = GBM_BO_USE_TEXTURING;
 
 	int c;
-	while ((c = getopt_long(argc, argv, "f:bgdth", longopts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "f:bgdh", longopts, NULL)) != -1) {
 		switch (c) {
 			case 'f':
 				if (!bs_parse_draw_format(optarg, &buffer.draw_format)) {
@@ -262,18 +261,18 @@ int main(int argc, char **argv)
 				break;
 			case 'b':
 				mapper = bs_mapper_dma_buf_new();
+				flags |= GBM_BO_USE_LINEAR;
 				printf("using dma-buf mmap\n");
 				break;
 			case 'g':
 				mapper = bs_mapper_gem_new();
+				flags |= GBM_BO_USE_SW_WRITE_OFTEN;
 				printf("using GEM map\n");
 				break;
 			case 'd':
 				mapper = bs_mapper_dumb_new(display_fd);
+				flags |= GBM_BO_USE_LINEAR;
 				printf("using dumb map\n");
-				break;
-			case 't':
-				flags = GBM_BO_USE_TEXTURING;
 				break;
 			case 'h':
 			default:
@@ -285,6 +284,7 @@ int main(int argc, char **argv)
 	// Use gem map mapper by default, in case any arguments aren't selected.
 	if (!mapper) {
 		mapper = bs_mapper_gem_new();
+		flags |= GBM_BO_USE_SW_WRITE_OFTEN;
 		printf("using GEM map\n");
 	}
 

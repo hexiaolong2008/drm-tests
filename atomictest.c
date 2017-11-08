@@ -340,6 +340,7 @@ static int add_plane_fb(struct atomictest_context *ctx, struct atomictest_plane 
 		CHECK_RESULT(remove_plane_fb(ctx, plane));
 		uint32_t flags = (plane->type.value == DRM_PLANE_TYPE_CURSOR) ? GBM_BO_USE_CURSOR
 									      : GBM_BO_USE_SCANOUT;
+		flags |= GBM_BO_USE_SW_WRITE_RARELY;
 		/* TODO(gsingh): add create with modifiers option. */
 		plane->bo = gbm_bo_create(gbm, plane->crtc_w.value, plane->crtc_h.value,
 					  plane->drm_plane.formats[plane->format_idx], flags);
