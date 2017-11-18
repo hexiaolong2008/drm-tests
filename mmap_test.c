@@ -9,7 +9,7 @@
 #include "bs_drm.h"
 
 #define BUFFERS 2
-#define NUM_FRAMES 0x100
+#define NUM_FRAMES 0x40
 
 struct framebuffer {
 	struct gbm_bo *bo;
