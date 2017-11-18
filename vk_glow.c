@@ -17,7 +17,7 @@
 // The Vulkan validation layer (VK_LAYER_LUNARG_standard_validation) does not
 // understand vkCreateDmaBufImageINTEL. To run with the validation layer,
 // #undef USE_vkCreateDmaBufImageINTEL and rebuild.
-#define USE_vkCreateDmaBufImageINTEL 1
+#define USE_vkCreateDmaBufImageINTEL 0
 
 #include <math.h>
 #include <stdbool.h>
@@ -346,10 +346,10 @@ int main(int argc, char **argv)
 					   // memory types are equally good.
 					   .memoryTypeIndex = ffs(mem_reqs.memoryTypeBits) - 1,
 				       },
-				       /*pAllocator*/ NULL, &fr->vk_image_memory);
+				       /*pAllocator*/ NULL, &fr->vk_memory);
 		check_vk_success(res, "vkAllocateMemory");
 
-		res = vkBindImageMemory(dev, fr->vk_image, fr->vk_image_memory,
+		res = vkBindImageMemory(dev, fr->vk_image, fr->vk_memory,
 					/*memoryOffset*/ 0);
 		check_vk_success(res, "vkBindImageMemory");
 #endif
@@ -443,20 +443,20 @@ int main(int argc, char **argv)
 			    },
 		};
 
-		vkCmdBeginRenderPass(
-		    fr->vk_cmd_buf,
-		    &(VkRenderPassBeginInfo){
-			.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-			.renderPass = pass,
-			.framebuffer = fr->vk_framebuffer,
-			.renderArea =
-			    (VkRect2D){
-				.offset = { 0, 0 }, .extent = { mode->hdisplay, mode->vdisplay },
-			    },
-			.clearValueCount = 1,
-			.pClearValues = (VkClearValue[]){ clear_color },
-		    },
-		    VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBeginRenderPass(fr->vk_cmd_buf,
+				     &(VkRenderPassBeginInfo){
+					 .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+					 .renderPass = pass,
+					 .framebuffer = fr->vk_framebuffer,
+					 .renderArea =
+					     (VkRect2D){
+						 .offset = { 0, 0 },
+						 .extent = { mode->hdisplay, mode->vdisplay },
+					     },
+					 .clearValueCount = 1,
+					 .pClearValues = (VkClearValue[]){ clear_color },
+				     },
+				     VK_SUBPASS_CONTENTS_INLINE);
 		vkCmdEndRenderPass(fr->vk_cmd_buf);
 
 		res = vkEndCommandBuffer(fr->vk_cmd_buf);
