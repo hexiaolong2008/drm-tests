@@ -24,6 +24,8 @@
 #include <unistd.h>
 #include <xf86drm.h>
 
+#include "bs_drm.h"
+
 #define WITH_COLOR 1
 
 #if WITH_COLOR
@@ -48,38 +50,7 @@
 #define SUCCESS_COLOR(x) ANSI_COLOR_GREEN x ANSI_COLOR_RESET
 
 const uint32_t g_bo_pattern = 0xdeadbeef;
-const char g_sys_card_path_format[] = "/sys/bus/platform/devices/vgem/drm/card%d";
 const char g_dev_card_path_format[] = "/dev/dri/card%d";
-
-int drm_open_vgem()
-{
-	char *name;
-	int i, fd;
-
-	for (i = 0; i < 16; i++) {
-		struct stat _stat;
-		int ret;
-		ret = asprintf(&name, g_sys_card_path_format, i);
-		assert(ret != -1);
-
-		if (stat(name, &_stat) == -1) {
-			free(name);
-			continue;
-		}
-
-		free(name);
-		ret = asprintf(&name, g_dev_card_path_format, i);
-		assert(ret != -1);
-
-		fd = open(name, O_RDWR);
-		free(name);
-		if (fd == -1) {
-			return -1;
-		}
-		return fd;
-	}
-	return -1;
-}
 
 int create_vgem_bo(int fd, size_t size, uint32_t *handle)
 {
@@ -148,7 +119,7 @@ static const char help_text[] =
     "Usage: %s [OPTIONS]\n"
     " -h          Print this help.\n"
     " -d [DEVICE] Open the given vgem device file (defaults to trying all cards under "
-    "/sys/bus/platform/devices/vgem/drm/).\n"
+    "/dev/dri/).\n"
     " -c [SIZE]   Create a buffer objects of the given size in bytes.\n";
 
 void print_help(const char *argv0)
@@ -191,7 +162,7 @@ int main(int argc, char *argv[])
 	if (device_file)
 		vgem_fd = open(device_file, O_RDWR);
 	else
-		vgem_fd = drm_open_vgem();
+		vgem_fd = bs_drm_open_vgem();
 
 	if (vgem_fd < 0) {
 		perror(FAIL_COLOR " to open vgem device");

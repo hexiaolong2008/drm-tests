@@ -38,7 +38,7 @@ CC_BINARY(drm_cursor_test): drm_cursor_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 CC_BINARY(null_platform_test): null_platform_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 CC_BINARY(null_platform_test): LDLIBS += $(DRM_LIBS)
 
-CC_BINARY(vgem_test): vgem_test.o
+CC_BINARY(vgem_test): vgem_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 CC_BINARY(mmap_test): mmap_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 
 CC_BINARY(linear_bo_test): linear_bo_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
