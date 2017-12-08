@@ -762,6 +762,13 @@ static struct atomictest_context *query_kms(int fd)
 						bs_debug_error("invalid plane type returned");
 						return NULL;
 				}
+
+				/*
+				 * The DRM UAPI states that cursor and overlay framebuffers may be
+				 * present after a CRTC disable, so zero this out so we can get a
+				 * clean slate.
+				 */
+				crtc->planes[idx].fb_id.value = 0;
 			}
 		}
 
