@@ -17,7 +17,7 @@
 // The Vulkan validation layer (VK_LAYER_LUNARG_standard_validation) does not
 // understand vkCreateDmaBufImageINTEL. To run with the validation layer,
 // #undef USE_vkCreateDmaBufImageINTEL and rebuild.
-#define USE_vkCreateDmaBufImageINTEL 0
+#undef USE_vkCreateDmaBufImageINTEL
 
 #include <math.h>
 #include <stdbool.h>
