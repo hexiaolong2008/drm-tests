@@ -82,6 +82,7 @@ struct atomictest_plane {
 	struct atomictest_property src_h;
 	struct atomictest_property type;
 	struct atomictest_property rotation;
+	struct atomictest_property ctm;
 };
 
 struct atomictest_connector {
@@ -281,9 +282,10 @@ static int get_plane_props(int fd, struct atomictest_plane *plane, drmModeObject
 	/*
 	 * The atomic API makes no guarantee a property is present in object. This test
 	 * requires the above common properties since a plane is undefined without them.
-	 * Other properties (i.e, rotation) are optional.
+	 * Other properties (i.e: rotation and ctm) are optional.
 	 */
 	get_prop(fd, props, "rotation", &plane->rotation);
+	get_prop(fd, props, "PLANE_CTM", &plane->ctm);
 	return 0;
 }
 
@@ -318,6 +320,8 @@ int set_plane_props(struct atomictest_plane *plane, drmModeAtomicReqPtr pset)
 	if (plane->rotation.pid)
 		CHECK_RESULT(
 		    drmModeAtomicAddProperty(pset, id, plane->rotation.pid, plane->rotation.value));
+	if (plane->ctm.pid)
+		CHECK_RESULT(drmModeAtomicAddProperty(pset, id, plane->ctm.pid, plane->ctm.value));
 
 	return 0;
 }
@@ -399,6 +403,8 @@ static int disable_plane(struct atomictest_context *ctx, struct atomictest_plane
 
 	if (plane->rotation.pid)
 		plane->rotation.value = DRM_ROTATE_0;
+	if (plane->ctm.pid)
+		plane->ctm.value = 0;
 
 	CHECK_RESULT(remove_plane_fb(ctx, plane));
 	CHECK_RESULT(set_plane_props(plane, ctx->pset));
@@ -919,6 +925,73 @@ static int test_orientation(struct atomictest_context *ctx, struct atomictest_cr
 	return 0;
 }
 
+static int test_plane_ctm(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
+{
+	struct atomictest_plane *primary, *overlay;
+	/*
+	 * The blob for the PLANE_CTM propery is a drm_color_ctm.
+	 * drm_color_ctm contains a 3x3 u64 matrix, where every element
+	 * represents a S31.32 fixed point number.
+	 */
+	int64_t identity_ctm[9] = { 0x100000000, 0x0, 0x0, 0x0,	0x100000000,
+				    0x0,	 0x0, 0x0, 0x100000000 };
+	int64_t red_shift_ctm[9] = { 0x140000000, 0x0, 0x0, 0x0,       0xC0000000,
+				     0x0,	 0x0, 0x0, 0xC0000000 };
+
+	for (uint32_t i = 0; i < crtc->num_overlay; i++) {
+		overlay = get_plane(crtc, i, DRM_PLANE_TYPE_OVERLAY);
+		if (!overlay->ctm.pid)
+			continue;
+
+		CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
+					crtc->height, crtc->crtc_id));
+
+		CHECK_RESULT(drmModeCreatePropertyBlob(ctx->fd, identity_ctm, sizeof(identity_ctm),
+						       &overlay->ctm.value));
+		set_plane_props(overlay, ctx->pset);
+		CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_LINES));
+		CHECK_RESULT(commit(ctx));
+		CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, overlay->ctm.value));
+		usleep(1e6);
+
+		CHECK_RESULT(drmModeCreatePropertyBlob(ctx->fd, red_shift_ctm,
+						       sizeof(red_shift_ctm), &overlay->ctm.value));
+		set_plane_props(overlay, ctx->pset);
+		CHECK_RESULT(commit(ctx));
+		CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, overlay->ctm.value));
+		usleep(1e6);
+
+		CHECK_RESULT(disable_plane(ctx, overlay));
+	}
+
+	for (uint32_t i = 0; i < crtc->num_primary; i++) {
+		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
+		if (!primary->ctm.pid)
+			continue;
+
+		CHECK_RESULT(init_plane(ctx, primary, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
+					crtc->height, crtc->crtc_id));
+		CHECK_RESULT(drmModeCreatePropertyBlob(ctx->fd, identity_ctm, sizeof(identity_ctm),
+						       &primary->ctm.value));
+		set_plane_props(primary, ctx->pset);
+		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_LINES));
+		CHECK_RESULT(commit(ctx));
+		CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, primary->ctm.value));
+		usleep(1e6);
+
+		CHECK_RESULT(drmModeCreatePropertyBlob(ctx->fd, red_shift_ctm,
+						       sizeof(red_shift_ctm), &primary->ctm.value));
+		set_plane_props(primary, ctx->pset);
+		CHECK_RESULT(commit(ctx));
+		CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, primary->ctm.value));
+		usleep(1e6);
+
+		CHECK_RESULT(disable_plane(ctx, primary));
+	}
+
+	return 0;
+}
+
 static int test_fullscreen_video(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
 {
 	struct atomictest_plane *primary;
@@ -1050,6 +1123,8 @@ static const struct atomictest_testcase cases[] = {
 	{ "primary_pageflip", test_primary_pageflip },
 	{ "video_overlay", test_video_overlay },
 	{ "orientation", test_orientation },
+	/* CTM stands for Color Transform Matrix. */
+	{ "plane_ctm", test_plane_ctm },
 };
 
 static int run_testcase(struct atomictest_context *ctx, struct atomictest_crtc *crtc,
