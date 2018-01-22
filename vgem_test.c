@@ -273,7 +273,8 @@ int main(int argc, char *argv[])
 	}
 
 	if (import_foreign) {
-		int dumb_fd = open("/dev/dri/card0", O_RDWR);
+		/* Open a card that's _not_ vgem. */
+		int dumb_fd = bs_drm_open_for_display();
 		if (dumb_fd == -1) {
 			perror(FAIL_COLOR " to open non-vgem card\n");
 			ret = 1;
