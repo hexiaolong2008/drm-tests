@@ -47,7 +47,8 @@
 #endif
 
 static const uint32_t yuv_formats[] = {
-	DRM_FORMAT_NV12, DRM_FORMAT_YVU420,
+	DRM_FORMAT_NV12,
+	DRM_FORMAT_YVU420,
 };
 
 static struct gbm_device *gbm = NULL;
@@ -379,13 +380,31 @@ static int init_plane(struct atomictest_context *ctx, struct atomictest_plane *p
 	return 0;
 }
 
-static int init_yuv_plane(struct atomictest_context *ctx, struct atomictest_plane *plane,
-			  uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t crtc_id)
+static int init_plane_any_format(struct atomictest_context *ctx, struct atomictest_plane *plane,
+				 uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t crtc_id,
+				 bool yuv)
 {
-	uint32_t i;
-	for (i = 0; i < BS_ARRAY_LEN(yuv_formats); i++)
-		if (!init_plane(ctx, plane, yuv_formats[i], x, y, w, h, crtc_id))
+	if (yuv) {
+		uint32_t i;
+		for (i = 0; i < BS_ARRAY_LEN(yuv_formats); i++)
+			if (!init_plane(ctx, plane, yuv_formats[i], x, y, w, h, crtc_id))
+				return 0;
+	} else {
+		// XRGB888 works well with our draw code, so try that first.
+		if (!init_plane(ctx, plane, DRM_FORMAT_XRGB8888, x, y, w, h, crtc_id))
 			return 0;
+
+		for (uint32_t format_idx = 0; format_idx < plane->drm_plane.count_formats;
+		     format_idx++) {
+			if (!gbm_device_is_format_supported(
+				gbm, plane->drm_plane.formats[format_idx], GBM_BO_USE_SCANOUT))
+				continue;
+
+			if (!init_plane(ctx, plane, plane->drm_plane.formats[format_idx], x, y, w,
+					h, crtc_id))
+				return 0;
+		}
+	}
 
 	return -EINVAL;
 }
@@ -802,12 +821,13 @@ static int test_multiple_planes(struct atomictest_context *ctx, struct atomictes
 			// formats.
 			x = BS_ALIGN(x, 2);
 			y = BS_ALIGN(y, 2);
-			if (video && !init_yuv_plane(ctx, overlay, x, y, x, y, crtc->crtc_id)) {
+			if (video &&
+			    !init_plane_any_format(ctx, overlay, x, y, x, y, crtc->crtc_id, true)) {
 				CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_STRIPE));
 				video = false;
 			} else {
-				CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, x, y, x,
-							y, crtc->crtc_id));
+				CHECK_RESULT(init_plane_any_format(ctx, overlay, x, y, x, y,
+								   crtc->crtc_id, false));
 				CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_LINES));
 			}
 		}
@@ -822,8 +842,8 @@ static int test_multiple_planes(struct atomictest_context *ctx, struct atomictes
 		}
 
 		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
-		CHECK_RESULT(init_plane(ctx, primary, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
-					crtc->height, crtc->crtc_id));
+		CHECK_RESULT(init_plane_any_format(ctx, primary, 0, 0, crtc->width, crtc->height,
+						   crtc->crtc_id, false));
 		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_ELLIPSE));
 
 		uint32_t num_planes = crtc->num_primary + crtc->num_cursor + crtc->num_overlay;
@@ -858,7 +878,7 @@ static int test_video_overlay(struct atomictest_context *ctx, struct atomictest_
 	struct atomictest_plane *overlay;
 	for (uint32_t i = 0; i < crtc->num_overlay; i++) {
 		overlay = get_plane(crtc, i, DRM_PLANE_TYPE_OVERLAY);
-		if (init_yuv_plane(ctx, overlay, 0, 0, 800, 800, crtc->crtc_id))
+		if (init_plane_any_format(ctx, overlay, 0, 0, 800, 800, crtc->crtc_id, true))
 			continue;
 
 		CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_STRIPE));
@@ -879,9 +899,8 @@ static int test_orientation(struct atomictest_context *ctx, struct atomictest_cr
 		if (!overlay->rotation.pid)
 			continue;
 
-		CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
-					crtc->height, crtc->crtc_id));
-
+		CHECK_RESULT(init_plane_any_format(ctx, overlay, 0, 0, crtc->width, crtc->height,
+						   crtc->crtc_id, false));
 		overlay->rotation.value = DRM_ROTATE_0;
 		set_plane_props(overlay, ctx->pset);
 		CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_LINES));
@@ -903,8 +922,8 @@ static int test_orientation(struct atomictest_context *ctx, struct atomictest_cr
 		if (!primary->rotation.pid)
 			continue;
 
-		CHECK_RESULT(init_plane(ctx, primary, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
-					crtc->height, crtc->crtc_id));
+		CHECK_RESULT(init_plane_any_format(ctx, primary, 0, 0, crtc->width, crtc->height,
+						   crtc->crtc_id, false));
 
 		primary->rotation.value = DRM_ROTATE_0;
 		set_plane_props(primary, ctx->pset);
@@ -969,8 +988,8 @@ static int test_plane_ctm(struct atomictest_context *ctx, struct atomictest_crtc
 		if (!primary->ctm.pid)
 			continue;
 
-		CHECK_RESULT(init_plane(ctx, primary, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
-					crtc->height, crtc->crtc_id));
+		CHECK_RESULT(init_plane_any_format(ctx, primary, 0, 0, crtc->width, crtc->height,
+						   crtc->crtc_id, false));
 		CHECK_RESULT(drmModeCreatePropertyBlob(ctx->fd, identity_ctm, sizeof(identity_ctm),
 						       &primary->ctm.value));
 		set_plane_props(primary, ctx->pset);
@@ -997,7 +1016,8 @@ static int test_fullscreen_video(struct atomictest_context *ctx, struct atomicte
 	struct atomictest_plane *primary;
 	for (uint32_t i = 0; i < crtc->num_primary; i++) {
 		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
-		if (init_yuv_plane(ctx, primary, 0, 0, crtc->width, crtc->height, crtc->crtc_id))
+		if (init_plane_any_format(ctx, primary, 0, 0, crtc->width, crtc->height,
+					  crtc->crtc_id, true))
 			continue;
 
 		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_STRIPE));
@@ -1016,14 +1036,14 @@ static int test_disable_primary(struct atomictest_context *ctx, struct atomictes
 			overlay = get_plane(crtc, j, DRM_PLANE_TYPE_OVERLAY);
 			uint32_t x = crtc->width >> (j + 2);
 			uint32_t y = crtc->height >> (j + 2);
-			CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, x, y, x, y,
-						crtc->crtc_id));
+			CHECK_RESULT(
+			    init_plane_any_format(ctx, overlay, x, y, x, y, crtc->crtc_id, false));
 			CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_LINES));
 		}
 
 		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
-		CHECK_RESULT(init_plane(ctx, primary, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
-					crtc->height, crtc->crtc_id));
+		CHECK_RESULT(init_plane_any_format(ctx, primary, 0, 0, crtc->width, crtc->height,
+						   crtc->crtc_id, false));
 		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_ELLIPSE));
 		CHECK_RESULT(commit(ctx));
 		usleep(1e6);
@@ -1055,11 +1075,9 @@ static int test_overlay_downscaling(struct atomictest_context *ctx, struct atomi
 	uint32_t h = BS_ALIGN(crtc->height / 2, 2);
 	for (uint32_t i = 0; i < crtc->num_overlay; i++) {
 		overlay = get_plane(crtc, i, DRM_PLANE_TYPE_OVERLAY);
-		if (init_yuv_plane(ctx, overlay, 0, 0, w, h, crtc->crtc_id)) {
+		if (init_plane_any_format(ctx, overlay, 0, 0, w, h, crtc->crtc_id, true))
 			CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, 0, 0, w, h,
 						crtc->crtc_id));
-		}
-
 		CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_LINES));
 		CHECK_RESULT(commit(ctx));
 		usleep(1e6);
@@ -1082,11 +1100,9 @@ static int test_overlay_upscaling(struct atomictest_context *ctx, struct atomict
 	uint32_t h = BS_ALIGN(crtc->height / 4, 2);
 	for (uint32_t i = 0; i < crtc->num_overlay; i++) {
 		overlay = get_plane(crtc, i, DRM_PLANE_TYPE_OVERLAY);
-		if (init_yuv_plane(ctx, overlay, 0, 0, w, h, crtc->crtc_id)) {
+		if (init_plane_any_format(ctx, overlay, 0, 0, w, h, crtc->crtc_id, true))
 			CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, 0, 0, w, h,
 						crtc->crtc_id));
-		}
-
 		CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_LINES));
 		CHECK_RESULT(commit(ctx));
 		usleep(1e6);
