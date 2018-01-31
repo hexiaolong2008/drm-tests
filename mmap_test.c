@@ -244,6 +244,7 @@ int main(int argc, char **argv)
 	// Use dma-buf mmap by default, in case any arguments aren't selected.
 	if (!ctx.mapper) {
 		ctx.mapper = bs_mapper_dma_buf_new();
+		flags |= GBM_BO_USE_LINEAR;
 		printf("started dma-buf mmap.\n");
 	}
 
