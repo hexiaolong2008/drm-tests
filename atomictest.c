@@ -1062,6 +1062,23 @@ static int test_disable_primary(struct atomictest_context *ctx, struct atomictes
 	return ret;
 }
 
+static int test_rgba_primary(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
+{
+	int ret = 0;
+	struct atomictest_plane *primary;
+	for (uint32_t i = 0; i < crtc->num_primary; i++) {
+		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
+		CHECK_RESULT(init_plane(ctx, primary, DRM_FORMAT_ARGB8888, 0, 0, crtc->width,
+					crtc->height, crtc->crtc_id));
+
+		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_LINES));
+
+		ret |= test_and_commit(ctx);
+	}
+
+	return ret;
+}
+
 static int test_overlay_pageflip(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
 {
 	struct atomictest_plane *overlay;
@@ -1136,6 +1153,7 @@ static int test_primary_pageflip(struct atomictest_context *ctx, struct atomicte
 
 static const struct atomictest_testcase cases[] = {
 	{ "disable_primary", test_disable_primary },
+	{ "rgba_primary", test_rgba_primary },
 	{ "fullscreen_video", test_fullscreen_video },
 	{ "multiple_planes", test_multiple_planes },
 	{ "overlay_pageflip", test_overlay_pageflip },
