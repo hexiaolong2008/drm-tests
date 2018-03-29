@@ -504,7 +504,8 @@ static void log(struct atomictest_context *ctx)
 
 static int test_commit(struct atomictest_context *ctx)
 {
-	return drmModeAtomicCommit(ctx->fd, ctx->pset, DRM_MODE_ATOMIC_TEST_ONLY, NULL);
+	return drmModeAtomicCommit(ctx->fd, ctx->pset,
+				   DRM_MODE_ATOMIC_ALLOW_MODESET | DRM_MODE_ATOMIC_TEST_ONLY, NULL);
 }
 
 static int commit(struct atomictest_context *ctx)
