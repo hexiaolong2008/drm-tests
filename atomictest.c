@@ -143,9 +143,10 @@ struct atomictest_testcase {
 enum draw_format_type {
 	DRAW_NONE = 0,
 	DRAW_STRIPE = 1,
-	DRAW_ELLIPSE = 2,
-	DRAW_CURSOR = 3,
-	DRAW_LINES = 4,
+	DRAW_TRANSPARENT_HOLE = 2,
+	DRAW_ELLIPSE = 3,
+	DRAW_CURSOR = 4,
+	DRAW_LINES = 5,
 };
 // clang-format on
 
@@ -196,6 +197,9 @@ static int draw_to_plane(struct bs_mapper *mapper, struct atomictest_plane *plan
 		switch (pattern) {
 			case DRAW_STRIPE:
 				CHECK(bs_draw_stripe(mapper, bo, draw_format));
+				break;
+			case DRAW_TRANSPARENT_HOLE:
+				CHECK(bs_draw_transparent_hole(mapper, bo, draw_format));
 				break;
 			case DRAW_ELLIPSE:
 				CHECK(bs_draw_ellipse(mapper, bo, draw_format, 0));
@@ -1017,6 +1021,40 @@ static int test_plane_ctm(struct atomictest_context *ctx, struct atomictest_crtc
 	return ret;
 }
 
+static int test_video_underlay(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
+{
+	int ret = 0;
+	int i = 0;
+	struct atomictest_plane *underlay = 0;
+	struct atomictest_plane *primary = 0;
+
+	for (; i < crtc->num_primary + crtc->num_overlay; ++i) {
+		if (crtc->planes[i].type.value != DRM_PLANE_TYPE_CURSOR) {
+			if (!underlay) {
+				underlay = &crtc->planes[i];
+			} else {
+				primary = &crtc->planes[i];
+				break;
+			}
+		}
+	}
+	if (!underlay || !primary)
+		return 0;
+
+	CHECK_RESULT(init_plane_any_format(ctx, underlay, 0, 0, crtc->width >> 2, crtc->height >> 2,
+					   crtc->crtc_id, true));
+	CHECK_RESULT(draw_to_plane(ctx->mapper, underlay, DRAW_LINES));
+
+	CHECK_RESULT(init_plane(ctx, primary, DRM_FORMAT_ARGB8888, 0, 0, crtc->width, crtc->height,
+				crtc->crtc_id));
+	CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_TRANSPARENT_HOLE));
+
+	while (!move_plane(ctx, crtc, underlay, 50, 20))
+		ret |= test_and_commit(ctx);
+
+	return ret;
+}
+
 static int test_fullscreen_video(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
 {
 	int ret = 0;
@@ -1162,6 +1200,7 @@ static const struct atomictest_testcase cases[] = {
 	{ "primary_pageflip", test_primary_pageflip },
 	{ "video_overlay", test_video_overlay },
 	{ "orientation", test_orientation },
+	{ "video_underlay", test_video_underlay },
 	/* CTM stands for Color Transform Matrix. */
 	{ "plane_ctm", test_plane_ctm },
 };

@@ -8,7 +8,7 @@
 #include "bs_drm.h"
 
 struct draw_format_component {
-	float rgb_coeffs[3];
+	float rgba_coeffs[4];
 	float value_offset;
 	uint32_t horizontal_subsample_rate;
 	uint32_t vertical_subsample_rate;
@@ -49,20 +49,20 @@ static const struct bs_draw_format bs_draw_formats[] = {
 	    PIXEL_FORMAT_AND_NAME(ABGR8888),
 	    4,
 	    {
-		{ { 1.0f, 0.0f, 0.0f }, 0.0f, 1, 1, 4, 0, 0 },
-		{ { 0.0f, 1.0f, 0.0f }, 0.0f, 1, 1, 4, 0, 1 },
-		{ { 0.0f, 0.0f, 1.0f }, 0.0f, 1, 1, 4, 0, 2 },
-		{ { 0.0f, 0.0f, 0.0f }, 255.0f, 1, 1, 4, 0, 3 },
+		{ { 1.0f, 0.0f, 0.0f, 0.0f }, 0.0f, 1, 1, 4, 0, 0 },
+		{ { 0.0f, 1.0f, 0.0f, 0.0f }, 0.0f, 1, 1, 4, 0, 1 },
+		{ { 0.0f, 0.0f, 1.0f, 0.0f }, 0.0f, 1, 1, 4, 0, 2 },
+		{ { 0.0f, 0.0f, 0.0f, 1.0f }, 0.0f, 1, 1, 4, 0, 3 },
 	    },
 	},
 	{
 	    PIXEL_FORMAT_AND_NAME(ARGB8888),
 	    4,
 	    {
-		{ { 0.0f, 0.0f, 1.0f }, 0.0f, 1, 1, 4, 0, 0 },
-		{ { 0.0f, 1.0f, 0.0f }, 0.0f, 1, 1, 4, 0, 1 },
-		{ { 1.0f, 0.0f, 0.0f }, 0.0f, 1, 1, 4, 0, 2 },
-		{ { 0.0f, 0.0f, 0.0f }, 255.0f, 1, 1, 4, 0, 3 },
+		{ { 0.0f, 0.0f, 1.0f, 0.0f }, 0.0f, 1, 1, 4, 0, 0 },
+		{ { 0.0f, 1.0f, 0.0f, 0.0f }, 0.0f, 1, 1, 4, 0, 1 },
+		{ { 1.0f, 0.0f, 0.0f, 0.0f }, 0.0f, 1, 1, 4, 0, 2 },
+		{ { 0.0f, 0.0f, 0.0f, 1.0f }, 0.0f, 1, 1, 4, 0, 3 },
 	    },
 	},
 	{
@@ -164,10 +164,10 @@ static uint8_t clampbyte(float f)
 }
 
 uint8_t static convert_color(const struct draw_format_component *comp, uint8_t r, uint8_t g,
-			     uint8_t b)
+			     uint8_t b, uint8_t a)
 {
-	return clampbyte(comp->value_offset + r * comp->rgb_coeffs[0] + g * comp->rgb_coeffs[1] +
-			 b * comp->rgb_coeffs[2]);
+	return clampbyte(comp->value_offset + r * comp->rgba_coeffs[0] + g * comp->rgba_coeffs[1] +
+			 b * comp->rgba_coeffs[2] + a * comp->rgba_coeffs[3]);
 }
 
 static void unmmap_planes(struct bs_mapper *mapper, struct gbm_bo *bo, size_t num_planes,
@@ -226,7 +226,7 @@ static bool draw_color(struct bs_mapper *mapper, struct gbm_bo *bo,
 				    &format->components[comp_index];
 				ptr = converted_colors[comp_index] + width * y + x;
 				*ptr = convert_color(comp, data->out_color[2], data->out_color[1],
-						     data->out_color[0]);
+						     data->out_color[0], data->out_color[3]);
 			}
 		}
 	}
@@ -291,7 +291,26 @@ static void compute_stripe(struct draw_data *data)
 	data->out_color[0] = b * i;
 	data->out_color[1] = g * i;
 	data->out_color[2] = r * i;
-	data->out_color[3] = 0;
+	data->out_color[3] = 255;
+}
+
+static void compute_transparent_hole(struct draw_data *data)
+{
+	// Write solid stripe pattern.
+	compute_stripe(data);
+	// Poke a round hole in the center of the screen.
+	float delta_x = (int)data->x - (int)data->w / 2;
+	float delta_y = (int)data->y - (int)data->h / 2;
+	float dist2 = delta_x * delta_x + delta_y * delta_y;
+	float alpha = 1.0f;
+	float half_min_wh = (data->w < data->h ? data->w : data->h) >> 1;
+	if (dist2 < half_min_wh * half_min_wh) {
+		alpha = 1 - 4 * (half_min_wh * half_min_wh - dist2) / ((half_min_wh * half_min_wh));
+		alpha = alpha < 0.0f ? 0.0f : alpha;
+	}
+	for (int i = 0; i < 3; ++i)
+		data->out_color[i] = data->out_color[i] * alpha;
+	data->out_color[3] = alpha * 255;
 }
 
 static void compute_ellipse(struct draw_data *data)
@@ -310,6 +329,7 @@ static void compute_ellipse(struct draw_data *data)
 	} else {
 		memset(data->out_color, (uint8_t)(data->progress * 255), 4);
 	}
+	data->out_color[3] = 0xFF;
 }
 
 static void compute_cursor(struct draw_data *data)
@@ -319,6 +339,7 @@ static void compute_cursor(struct draw_data *data)
 		memset(data->out_color, 0xFF, 4);
 	else
 		memset(data->out_color, 0, 4);
+	data->out_color[3] = 0xFF;
 }
 
 static void compute_lines(struct draw_data *data)
@@ -355,13 +376,13 @@ static void compute_lines(struct draw_data *data)
 		line_data->base.out_color[0] = 0;
 		line_data->base.out_color[1] = 128;
 		line_data->base.out_color[2] = 128;
-		line_data->base.out_color[3] = 0;
+		line_data->base.out_color[3] = 255;
 	} else {
 		// fuchsia
 		line_data->base.out_color[0] = 255;
 		line_data->base.out_color[1] = 0;
 		line_data->base.out_color[2] = 255;
-		line_data->base.out_color[3] = 0;
+		line_data->base.out_color[3] = 255;
 	}
 }
 
@@ -370,6 +391,13 @@ bool bs_draw_stripe(struct bs_mapper *mapper, struct gbm_bo *bo,
 {
 	struct draw_data data = { 0 };
 	return draw_color(mapper, bo, format, &data, compute_stripe);
+}
+
+bool bs_draw_transparent_hole(struct bs_mapper *mapper, struct gbm_bo *bo,
+			      const struct bs_draw_format *format)
+{
+	struct draw_data data = { 0 };
+	return draw_color(mapper, bo, format, &data, compute_transparent_hole);
 }
 
 bool bs_draw_ellipse(struct bs_mapper *mapper, struct gbm_bo *bo,

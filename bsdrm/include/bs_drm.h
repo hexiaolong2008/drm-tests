@@ -46,9 +46,9 @@ __attribute__((format(printf, 5, 6))) void bs_debug_print(const char *prefix, co
 		bs_debug_print("ERROR", __func__, __FILE__, __LINE__, __VA_ARGS__); \
 	} while (0)
 
-#define bs_debug_warning(...)                                                       \
-	do {                                                                        \
-		bs_debug_print("WARN", __func__, __FILE__, __LINE__, __VA_ARGS__);  \
+#define bs_debug_warning(...)                                                      \
+	do {                                                                       \
+		bs_debug_print("WARN", __func__, __FILE__, __LINE__, __VA_ARGS__); \
 	} while (0)
 
 int64_t bs_debug_gettime_ns();
@@ -215,6 +215,9 @@ struct bs_draw_format;
 
 bool bs_draw_stripe(struct bs_mapper *mapper, struct gbm_bo *bo,
 		    const struct bs_draw_format *format);
+bool bs_draw_transparent_hole(struct bs_mapper *mapper, struct gbm_bo *bo,
+			      const struct bs_draw_format *format);
+
 bool bs_draw_ellipse(struct bs_mapper *mapper, struct gbm_bo *bo,
 		     const struct bs_draw_format *format, float progress);
 bool bs_draw_cursor(struct bs_mapper *mapper, struct gbm_bo *bo,
