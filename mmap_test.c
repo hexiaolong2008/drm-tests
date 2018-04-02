@@ -102,7 +102,7 @@ static void draw(struct context *ctx)
 
 	for (sequence_index = 0; sequence_index < 4; sequence_index++) {
 		show_sequence(sequences[sequence_index]);
-		for (int frame_index = 0; frame_index < NUM_FRAMES; frame_index++) {
+		for (int frame_index = 0; frame_index < NUM_FRAMES; frame_index += 2) {
 			struct framebuffer *fb = &ctx->fbs[fb_idx];
 			size_t bo_stride = gbm_bo_get_plane_stride(fb->bo, 0);
 			size_t bo_size = gbm_bo_get_plane_size(fb->bo, 0);

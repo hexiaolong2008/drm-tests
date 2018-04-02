@@ -870,7 +870,7 @@ static int test_multiple_planes(struct atomictest_context *ctx, struct atomictes
 			for (uint32_t j = 0; j < num_planes; j++) {
 				plane = &crtc->planes[j];
 				if (plane->type.value != DRM_PLANE_TYPE_PRIMARY)
-					done &= move_plane(ctx, crtc, plane, 20, 20);
+					done &= move_plane(ctx, crtc, plane, 40, 40);
 			}
 
 			ret |= test_and_commit(ctx);
@@ -896,7 +896,7 @@ static int test_video_overlay(struct atomictest_context *ctx, struct atomictest_
 			continue;
 
 		CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_STRIPE));
-		while (!move_plane(ctx, crtc, overlay, 20, 20))
+		while (!move_plane(ctx, crtc, overlay, 40, 40))
 			ret |= test_and_commit(ctx);
 	}
 
