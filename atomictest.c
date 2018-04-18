@@ -959,8 +959,8 @@ static int test_plane_ctm(struct atomictest_context *ctx, struct atomictest_crtc
 	struct atomictest_plane *primary, *overlay;
 	/*
 	 * The blob for the PLANE_CTM propery is a drm_color_ctm.
-	 * drm_color_ctm contains a 3x3 u64 matrix, where every element
-	 * represents a S31.32 fixed point number.
+	 * drm_color_ctm contains a 3x3 u64 matrix. Every element is represented as
+	 * sign and U31.32. The sign is the MSB.
 	 */
 	int64_t identity_ctm[9] = { 0x100000000, 0x0, 0x0, 0x0,	0x100000000,
 				    0x0,	 0x0, 0x0, 0x100000000 };
