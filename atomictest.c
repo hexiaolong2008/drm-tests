@@ -53,6 +53,7 @@ static const uint32_t yuv_formats[] = {
 	DRM_FORMAT_YVU420,
 };
 
+static bool automatic = false;
 static struct gbm_device *gbm = NULL;
 
 static void page_flip_handler(int fd, unsigned int sequence, unsigned int tv_sec,
@@ -534,11 +535,12 @@ static int commit(struct atomictest_context *ctx)
 	return 0;
 }
 
-static int test_and_commit(struct atomictest_context *ctx)
+static int test_and_commit(struct atomictest_context *ctx, uint32_t sleep_micro_secs)
 {
+	sleep_micro_secs = automatic ? 0 : sleep_micro_secs;
 	if (!test_commit(ctx)) {
 		CHECK_RESULT(commit(ctx));
-		usleep(1e6);
+		usleep(sleep_micro_secs);
 	} else {
 		return TEST_COMMIT_FAIL;
 	}
@@ -560,7 +562,7 @@ static int pageflip_formats(struct atomictest_context *ctx, struct atomictest_cr
 		CHECK_RESULT(init_plane(ctx, plane, plane->drm_plane.formats[i], 0, 0, crtc->width,
 					crtc->height, crtc->crtc_id));
 		CHECK_RESULT(draw_to_plane(ctx->mapper, plane, DRAW_ELLIPSE));
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6);
 
 		// disable, but don't commit, since we can't have an active CRTC without any planes.
 		CHECK_RESULT(disable_plane(ctx, plane));
@@ -877,14 +879,14 @@ static int test_multiple_planes(struct atomictest_context *ctx, struct atomictes
 					done &= move_plane(ctx, crtc, plane, 40, 40);
 			}
 
-			ret |= test_and_commit(ctx);
+			ret |= test_and_commit(ctx, 1e6 / 60);
 		}
 
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6);
 
 		/* Disable primary plane and verify overlays show up. */
 		CHECK_RESULT(disable_plane(ctx, primary));
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6);
 	}
 
 	return ret;
@@ -901,7 +903,7 @@ static int test_video_overlay(struct atomictest_context *ctx, struct atomictest_
 
 		CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_STRIPE));
 		while (!move_plane(ctx, crtc, overlay, 40, 40))
-			ret |= test_and_commit(ctx);
+			ret |= test_and_commit(ctx, 1e6 / 60);
 	}
 
 	return ret;
@@ -921,11 +923,11 @@ static int test_orientation(struct atomictest_context *ctx, struct atomictest_cr
 		overlay->rotation.value = DRM_ROTATE_0;
 		set_plane_props(overlay, ctx->pset);
 		CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_LINES));
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6);
 
 		overlay->rotation.value = DRM_REFLECT_Y;
 		set_plane_props(overlay, ctx->pset);
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6);
 
 		CHECK_RESULT(disable_plane(ctx, overlay));
 	}
@@ -941,11 +943,11 @@ static int test_orientation(struct atomictest_context *ctx, struct atomictest_cr
 		primary->rotation.value = DRM_ROTATE_0;
 		set_plane_props(primary, ctx->pset);
 		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_LINES));
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6);
 
 		primary->rotation.value = DRM_REFLECT_Y;
 		set_plane_props(primary, ctx->pset);
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6);
 
 		CHECK_RESULT(disable_plane(ctx, primary));
 	}
@@ -979,16 +981,14 @@ static int test_plane_ctm(struct atomictest_context *ctx, struct atomictest_crtc
 						       &overlay->ctm.value));
 		set_plane_props(overlay, ctx->pset);
 		CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_LINES));
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6);
 		CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, overlay->ctm.value));
-		usleep(1e6);
 
 		CHECK_RESULT(drmModeCreatePropertyBlob(ctx->fd, red_shift_ctm,
 						       sizeof(red_shift_ctm), &overlay->ctm.value));
 		set_plane_props(overlay, ctx->pset);
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6);
 		CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, overlay->ctm.value));
-		usleep(1e6);
 
 		CHECK_RESULT(disable_plane(ctx, overlay));
 	}
@@ -1004,16 +1004,14 @@ static int test_plane_ctm(struct atomictest_context *ctx, struct atomictest_crtc
 						       &primary->ctm.value));
 		set_plane_props(primary, ctx->pset);
 		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_LINES));
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6);
 		CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, primary->ctm.value));
-		usleep(1e6);
 
 		CHECK_RESULT(drmModeCreatePropertyBlob(ctx->fd, red_shift_ctm,
 						       sizeof(red_shift_ctm), &primary->ctm.value));
 		set_plane_props(primary, ctx->pset);
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6);
 		CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, primary->ctm.value));
-		usleep(1e6);
 
 		CHECK_RESULT(disable_plane(ctx, primary));
 	}
@@ -1050,7 +1048,7 @@ static int test_video_underlay(struct atomictest_context *ctx, struct atomictest
 	CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_TRANSPARENT_HOLE));
 
 	while (!move_plane(ctx, crtc, underlay, 50, 20))
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6 / 60);
 
 	return ret;
 }
@@ -1066,7 +1064,7 @@ static int test_fullscreen_video(struct atomictest_context *ctx, struct atomicte
 			continue;
 
 		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_STRIPE));
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6);
 	}
 
 	return ret;
@@ -1090,11 +1088,11 @@ static int test_disable_primary(struct atomictest_context *ctx, struct atomictes
 		CHECK_RESULT(init_plane_any_format(ctx, primary, 0, 0, crtc->width, crtc->height,
 						   crtc->crtc_id, false));
 		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_ELLIPSE));
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6);
 
 		/* Disable primary plane. */
 		disable_plane(ctx, primary);
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6);
 	}
 
 	return ret;
@@ -1111,7 +1109,7 @@ static int test_rgba_primary(struct atomictest_context *ctx, struct atomictest_c
 
 		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_LINES));
 
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6);
 	}
 
 	return ret;
@@ -1140,7 +1138,7 @@ static int test_overlay_downscaling(struct atomictest_context *ctx, struct atomi
 			CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, 0, 0, w, h,
 						crtc->crtc_id));
 		CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_LINES));
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6);
 
 		while (!scale_plane(ctx, crtc, overlay, -.1f, -.1f) && !test_commit(ctx)) {
 			CHECK_RESULT(commit(ctx));
@@ -1165,7 +1163,7 @@ static int test_overlay_upscaling(struct atomictest_context *ctx, struct atomict
 			CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, 0, 0, w, h,
 						crtc->crtc_id));
 		CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_LINES));
-		ret |= test_and_commit(ctx);
+		ret |= test_and_commit(ctx, 1e6);
 
 		while (!scale_plane(ctx, crtc, overlay, .1f, .1f) && !test_commit(ctx)) {
 			CHECK_RESULT(commit(ctx));
@@ -1303,12 +1301,13 @@ static const struct option longopts[] = {
 	{ "crtc", required_argument, NULL, 'c' },
 	{ "test_name", required_argument, NULL, 't' },
 	{ "help", no_argument, NULL, 'h' },
+	{ "automatic", no_argument, NULL, 'a' },
 	{ 0, 0, 0, 0 },
 };
 
 static void print_help(const char *argv0)
 {
-	printf("usage: %s -t <test_name> -c <crtc_index>\n", argv0);
+	printf("usage: %s -t <test_name> -c <crtc_index> -a (if running automatically)\n", argv0);
 	printf("A valid name test is one the following:\n");
 	for (uint32_t i = 0; i < BS_ARRAY_LEN(cases); i++)
 		printf("%s\n", cases[i].name);
@@ -1321,8 +1320,11 @@ int main(int argc, char **argv)
 	char *name = NULL;
 	int32_t crtc_idx = -1;
 	uint32_t crtc_mask = ~0;
-	while ((c = getopt_long(argc, argv, "c:t:h", longopts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "c:t:h:a", longopts, NULL)) != -1) {
 		switch (c) {
+			case 'a':
+				automatic = true;
+				break;
 			case 'c':
 				if (sscanf(optarg, "%d", &crtc_idx) != 1)
 					goto print;
