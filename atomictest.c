@@ -53,6 +53,24 @@ static const uint32_t yuv_formats[] = {
 	DRM_FORMAT_YVU420,
 };
 
+/*
+ * The blob for the CTM propery is a drm_color_ctm.
+ * drm_color_ctm contains a 3x3 u64 matrix. Every element is represented as
+ * sign and U31.32. The sign is the MSB.
+ */
+// clang-format off
+static int64_t identity_ctm[9] = {
+	0x100000000, 0x0, 0x0,
+	0x0, 0x100000000, 0x0,
+	0x0, 0x0, 0x100000000
+};
+static int64_t red_shift_ctm[9] = {
+	0x140000000, 0x0, 0x0,
+	0x0, 0xC0000000, 0x0,
+	0x0, 0x0, 0xC0000000
+};
+// clang-format on
+
 static bool automatic = false;
 static struct gbm_device *gbm = NULL;
 
@@ -110,6 +128,7 @@ struct atomictest_crtc {
 	struct atomictest_plane *planes;
 	struct atomictest_property mode_id;
 	struct atomictest_property active;
+	struct atomictest_property ctm;
 };
 
 struct atomictest_mode {
@@ -270,6 +289,13 @@ static int get_crtc_props(int fd, struct atomictest_crtc *crtc, drmModeObjectPro
 {
 	CHECK_RESULT(get_prop(fd, props, "MODE_ID", &crtc->mode_id));
 	CHECK_RESULT(get_prop(fd, props, "ACTIVE", &crtc->active));
+
+	/*
+	 * The atomic API makes no guarantee a property is present in object. This test
+	 * requires the above common properties since a plane is undefined without them.
+	 * Other properties (i.e: ctm) are optional.
+	 */
+	get_prop(fd, props, "CTM", &crtc->ctm);
 	return 0;
 }
 
@@ -309,6 +335,8 @@ int set_crtc_props(struct atomictest_crtc *crtc, drmModeAtomicReqPtr pset)
 	uint32_t id = crtc->crtc_id;
 	CHECK_RESULT(drmModeAtomicAddProperty(pset, id, crtc->mode_id.pid, crtc->mode_id.value));
 	CHECK_RESULT(drmModeAtomicAddProperty(pset, id, crtc->active.pid, crtc->active.value));
+	if (crtc->ctm.pid)
+		CHECK_RESULT(drmModeAtomicAddProperty(pset, id, crtc->ctm.pid, crtc->ctm.value));
 	return 0;
 }
 
@@ -643,6 +671,9 @@ static int disable_crtc(struct atomictest_context *ctx, struct atomictest_crtc *
 
 	crtc->mode_id.value = 0;
 	crtc->active.value = 0;
+	if (crtc->ctm.pid)
+		crtc->ctm.value = 0;
+
 	set_crtc_props(crtc, ctx->pset);
 	int ret = drmModeAtomicCommit(ctx->fd, ctx->pset, DRM_MODE_ATOMIC_ALLOW_MODESET, NULL);
 	CHECK_RESULT(ret);
@@ -959,15 +990,6 @@ static int test_plane_ctm(struct atomictest_context *ctx, struct atomictest_crtc
 {
 	int ret = 0;
 	struct atomictest_plane *primary, *overlay;
-	/*
-	 * The blob for the PLANE_CTM propery is a drm_color_ctm.
-	 * drm_color_ctm contains a 3x3 u64 matrix. Every element is represented as
-	 * sign and U31.32. The sign is the MSB.
-	 */
-	int64_t identity_ctm[9] = { 0x100000000, 0x0, 0x0, 0x0,	0x100000000,
-				    0x0,	 0x0, 0x0, 0x100000000 };
-	int64_t red_shift_ctm[9] = { 0x140000000, 0x0, 0x0, 0x0,       0xC0000000,
-				     0x0,	 0x0, 0x0, 0xC0000000 };
 
 	for (uint32_t i = 0; i < crtc->num_overlay; i++) {
 		overlay = get_plane(crtc, i, DRM_PLANE_TYPE_OVERLAY);
@@ -1192,6 +1214,49 @@ static int test_primary_pageflip(struct atomictest_context *ctx, struct atomicte
 	return 0;
 }
 
+static int test_crtc_ctm(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
+{
+	int ret = 0;
+	struct atomictest_plane *primary;
+	if (!crtc->ctm.pid)
+		return 0;
+
+	CHECK_RESULT(drmModeCreatePropertyBlob(ctx->fd, identity_ctm, sizeof(identity_ctm),
+					       &crtc->ctm.value));
+	set_crtc_props(crtc, ctx->pset);
+	for (uint32_t i = 0; i < crtc->num_primary; i++) {
+		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
+
+		CHECK_RESULT(init_plane(ctx, primary, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
+					crtc->height, crtc->crtc_id));
+		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_LINES));
+		ret |= test_and_commit(ctx, 1e6);
+
+		primary->crtc_id.value = 0;
+		CHECK_RESULT(set_plane_props(primary, ctx->pset));
+	}
+
+	CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, crtc->ctm.value));
+
+	CHECK_RESULT(drmModeCreatePropertyBlob(ctx->fd, red_shift_ctm, sizeof(red_shift_ctm),
+					       &crtc->ctm.value));
+	set_crtc_props(crtc, ctx->pset);
+	for (uint32_t i = 0; i < crtc->num_primary; i++) {
+		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
+		primary->crtc_id.value = crtc->crtc_id;
+		CHECK_RESULT(set_plane_props(primary, ctx->pset));
+
+		ret |= test_and_commit(ctx, 1e6);
+
+		primary->crtc_id.value = 0;
+		CHECK_RESULT(disable_plane(ctx, primary));
+	}
+
+	CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, crtc->ctm.value));
+
+	return ret;
+}
+
 static const struct atomictest_testcase cases[] = {
 	{ "disable_primary", test_disable_primary },
 	{ "rgba_primary", test_rgba_primary },
@@ -1206,6 +1271,7 @@ static const struct atomictest_testcase cases[] = {
 	{ "video_underlay", test_video_underlay },
 	/* CTM stands for Color Transform Matrix. */
 	{ "plane_ctm", test_plane_ctm },
+	{ "crtc_ctm", test_crtc_ctm },
 };
 
 static int run_testcase(struct atomictest_context *ctx, struct atomictest_crtc *crtc,
