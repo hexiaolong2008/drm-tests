@@ -48,6 +48,8 @@
 
 #define TEST_COMMIT_FAIL 1
 
+#define GAMMA_MAX_VALUE ((1 << 16) - 1)
+
 static const uint32_t yuv_formats[] = {
 	DRM_FORMAT_NV12,
 	DRM_FORMAT_YVU420,
@@ -129,6 +131,8 @@ struct atomictest_crtc {
 	struct atomictest_property mode_id;
 	struct atomictest_property active;
 	struct atomictest_property ctm;
+	struct atomictest_property gamma_lut;
+	struct atomictest_property gamma_lut_size;
 };
 
 struct atomictest_mode {
@@ -296,6 +300,8 @@ static int get_crtc_props(int fd, struct atomictest_crtc *crtc, drmModeObjectPro
 	 * Other properties (i.e: ctm) are optional.
 	 */
 	get_prop(fd, props, "CTM", &crtc->ctm);
+	get_prop(fd, props, "GAMMA_LUT", &crtc->gamma_lut);
+	get_prop(fd, props, "GAMMA_LUT_SIZE", &crtc->gamma_lut_size);
 	return 0;
 }
 
@@ -337,6 +343,9 @@ int set_crtc_props(struct atomictest_crtc *crtc, drmModeAtomicReqPtr pset)
 	CHECK_RESULT(drmModeAtomicAddProperty(pset, id, crtc->active.pid, crtc->active.value));
 	if (crtc->ctm.pid)
 		CHECK_RESULT(drmModeAtomicAddProperty(pset, id, crtc->ctm.pid, crtc->ctm.value));
+	if (crtc->gamma_lut.pid)
+		CHECK_RESULT(
+		    drmModeAtomicAddProperty(pset, id, crtc->gamma_lut.pid, crtc->gamma_lut.value));
 	return 0;
 }
 
@@ -673,6 +682,8 @@ static int disable_crtc(struct atomictest_context *ctx, struct atomictest_crtc *
 	crtc->active.value = 0;
 	if (crtc->ctm.pid)
 		crtc->ctm.value = 0;
+	if (crtc->gamma_lut.pid)
+		crtc->gamma_lut.value = 0;
 
 	set_crtc_props(crtc, ctx->pset);
 	int ret = drmModeAtomicCommit(ctx->fd, ctx->pset, DRM_MODE_ATOMIC_ALLOW_MODESET, NULL);
@@ -1257,6 +1268,84 @@ static int test_crtc_ctm(struct atomictest_context *ctx, struct atomictest_crtc 
 	return ret;
 }
 
+static void gamma_linear(struct drm_color_lut *table, int size)
+{
+	for (int i = 0; i < size; i++) {
+		float v = (float)(i) / (float)(size - 1);
+		v *= (float) GAMMA_MAX_VALUE;
+		table[i].red = (uint16_t)v;
+		table[i].green = (uint16_t)v;
+		table[i].blue = (uint16_t)v;
+	}
+}
+
+static void gamma_step(struct drm_color_lut *table, int size)
+{
+	for (int i = 0; i < size; i++) {
+		float v = (i < size / 2) ? 0 : GAMMA_MAX_VALUE;
+		table[i].red = (uint16_t)v;
+		table[i].green = (uint16_t)v;
+		table[i].blue = (uint16_t)v;
+	}
+}
+
+static int test_crtc_gamma(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
+{
+	int ret = 0;
+	struct atomictest_plane *primary;
+	if (!crtc->gamma_lut.pid || !crtc->gamma_lut_size.pid)
+		return 0;
+
+	if (crtc->gamma_lut_size.value == 0)
+		return 0;
+
+	struct drm_color_lut *gamma_table =
+	    calloc(crtc->gamma_lut_size.value, sizeof(*gamma_table));
+
+	gamma_linear(gamma_table, crtc->gamma_lut_size.value);
+	CHECK_RESULT(drmModeCreatePropertyBlob(
+	    ctx->fd, gamma_table, sizeof(struct drm_color_lut) * crtc->gamma_lut_size.value,
+	    &crtc->gamma_lut.value));
+	set_crtc_props(crtc, ctx->pset);
+
+	for (uint32_t i = 0; i < crtc->num_primary; i++) {
+		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
+
+		CHECK_RESULT(init_plane(ctx, primary, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
+					crtc->height, crtc->crtc_id));
+
+		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_STRIPE));
+		ret |= test_and_commit(ctx, 1e6);
+
+		CHECK_RESULT(disable_plane(ctx, primary));
+	}
+
+	CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, crtc->gamma_lut.value));
+
+	gamma_step(gamma_table, crtc->gamma_lut_size.value);
+	CHECK_RESULT(drmModeCreatePropertyBlob(
+	    ctx->fd, gamma_table, sizeof(struct drm_color_lut) * crtc->gamma_lut_size.value,
+	    &crtc->gamma_lut.value));
+	set_crtc_props(crtc, ctx->pset);
+
+	for (uint32_t i = 0; i < crtc->num_primary; i++) {
+		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
+
+		CHECK_RESULT(init_plane(ctx, primary, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
+					crtc->height, crtc->crtc_id));
+
+		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_STRIPE));
+		ret |= test_and_commit(ctx, 1e6);
+
+		CHECK_RESULT(disable_plane(ctx, primary));
+	}
+
+	CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, crtc->gamma_lut.value));
+	free(gamma_table);
+
+	return ret;
+}
+
 static const struct atomictest_testcase cases[] = {
 	{ "disable_primary", test_disable_primary },
 	{ "rgba_primary", test_rgba_primary },
@@ -1272,6 +1361,7 @@ static const struct atomictest_testcase cases[] = {
 	/* CTM stands for Color Transform Matrix. */
 	{ "plane_ctm", test_plane_ctm },
 	{ "crtc_ctm", test_crtc_ctm },
+	{ "crtc_gamma", test_crtc_gamma },
 };
 
 static int run_testcase(struct atomictest_context *ctx, struct atomictest_crtc *crtc,
