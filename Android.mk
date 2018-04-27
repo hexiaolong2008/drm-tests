@@ -1,17 +1,51 @@
+# Copyright 2018 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
 LOCAL_PATH := $(call my-dir)
 
 #########################
 
-include $(CLEAR_VARS)
-LOCAL_SRC_FILES :=  nv12_test.c bo.c dev.c modeset.c
+bsdrm_srcs = \
+	bsdrm/src/app.c \
+	bsdrm/src/debug.c \
+	bsdrm/src/draw.c \
+	bsdrm/src/drm_connectors.c \
+	bsdrm/src/drm_fb.c \
+	bsdrm/src/drm_open.c \
+	bsdrm/src/drm_pipe.c \
+	bsdrm/src/egl.c \
+	bsdrm/src/gl.c \
+	bsdrm/src/mmap.c \
+	bsdrm/src/open.c \
+	bsdrm/src/pipe.c
 
-LOCAL_MODULE := nv12_test
+include $(CLEAR_VARS)
+
+LOCAL_SRC_FILES := $(bsdrm_srcs) atomictest.c
+
+LOCAL_MODULE := atomictest
+LOCAL_MODULE_TAGS := optional
 
 LOCAL_C_INCLUDES := \
-	external/libdrm \
-	external/libdrm/include/drm
+	$(LOCAL_PATH)/bsdrm/include \
+	$(VENDOR_SDK_INCLUDES)
 LOCAL_CFLAGS := -O2 -g -W -Wall
-LOCAL_SYSTEM_SHARED_LIBRARIES := libc
-LOCAL_SHARED_LIBRARIES := libdrm
+LOCAL_SHARED_LIBRARIES := libdrm libminigbm
+
+include $(BUILD_EXECUTABLE)
+
+include $(CLEAR_VARS)
+
+LOCAL_SRC_FILES := $(bsdrm_srcs) gamma_test.c
+
+LOCAL_MODULE := gamma_test
+LOCAL_MODULE_TAGS := optional
+
+LOCAL_C_INCLUDES := \
+	$(LOCAL_PATH)/bsdrm/include \
+	$(VENDOR_SDK_INCLUDES)
+LOCAL_CFLAGS := -O2 -g -W -Wall
+LOCAL_SHARED_LIBRARIES := libdrm libminigbm
 
 include $(BUILD_EXECUTABLE)
