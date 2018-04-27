@@ -1039,8 +1039,13 @@ static int test_video_underlay(struct atomictest_context *ctx, struct atomictest
 	if (!underlay || !primary)
 		return 0;
 
-	CHECK_RESULT(init_plane_any_format(ctx, underlay, 0, 0, crtc->width >> 2, crtc->height >> 2,
-					   crtc->crtc_id, true));
+	if (init_plane_any_format(ctx, underlay, 0, 0, crtc->width >> 2, crtc->height >> 2,
+				  crtc->crtc_id, true)) {
+		// Fall back to a non YUV format.
+		CHECK_RESULT(init_plane_any_format(ctx, underlay, 0, 0, crtc->width >> 2,
+						   crtc->height >> 2, crtc->crtc_id, false));
+	}
+
 	CHECK_RESULT(draw_to_plane(ctx->mapper, underlay, DRAW_LINES));
 
 	CHECK_RESULT(init_plane(ctx, primary, DRM_FORMAT_ARGB8888, 0, 0, crtc->width, crtc->height,
