@@ -424,12 +424,13 @@ int main(int argc, char **argv)
 	}
 
 	void *map_data;
-	void *bo_ptr = bs_mapper_map(mapper, bg_bo, 0, &map_data);
+	uint32_t stride;
+	void *bo_ptr = bs_mapper_map(mapper, bg_bo, 0, &map_data, &stride);
 	if (bo_ptr == MAP_FAILED) {
 		bs_debug_error("failed to mmap background buffer object");
 		return 1;
 	}
-	memset(bo_ptr, 0, gbm_bo_get_height(bg_bo) * gbm_bo_get_stride(bg_bo));
+	memset(bo_ptr, 0, gbm_bo_get_height(bg_bo) * stride);
 	bs_mapper_unmap(mapper, bg_bo, map_data);
 
 	uint32_t crtc_fb_id = bs_drm_fb_create_gbm(bg_bo);

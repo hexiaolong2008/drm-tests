@@ -104,7 +104,7 @@ static void draw(struct context *ctx)
 		show_sequence(sequences[sequence_index]);
 		for (int frame_index = 0; frame_index < NUM_FRAMES; frame_index += 2) {
 			struct framebuffer *fb = &ctx->fbs[fb_idx];
-			size_t bo_stride = gbm_bo_get_plane_stride(fb->bo, 0);
+			uint32_t bo_stride;
 			size_t bo_size = gbm_bo_get_plane_size(fb->bo, 0);
 			const uint32_t width = gbm_bo_get_width(fb->bo);
 			const uint32_t height = gbm_bo_get_height(fb->bo);
@@ -116,7 +116,7 @@ static void draw(struct context *ctx)
 				switch (sequences[sequence_index][sequence_subindex]) {
 					case STEP_MMAP:
 						bo_ptr = bs_mapper_map(ctx->mapper, fb->bo, 0,
-								       &map_data);
+								       &map_data, &bo_stride);
 						if (bo_ptr == MAP_FAILED)
 							bs_debug_error("failed to mmap gbm bo");
 

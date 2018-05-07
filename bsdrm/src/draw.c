@@ -183,8 +183,8 @@ static size_t mmap_planes(struct bs_mapper *mapper, struct gbm_bo *bo,
 	size_t num_planes = gbm_bo_get_num_planes(bo);
 	for (size_t plane_index = 0; plane_index < num_planes; plane_index++) {
 		struct draw_plane *plane = &planes[plane_index];
-		plane->row_stride = gbm_bo_get_plane_stride(bo, plane_index);
-		plane->ptr = bs_mapper_map(mapper, bo, plane_index, &plane->map_data);
+		plane->ptr =
+		    bs_mapper_map(mapper, bo, plane_index, &plane->map_data, &plane->row_stride);
 		if (plane->ptr == MAP_FAILED) {
 			bs_debug_error("failed to mmap plane %zu of buffer object", plane_index);
 			unmmap_planes(mapper, bo, plane_index, planes);

@@ -98,18 +98,18 @@ static drmModeModeInfoPtr find_best_mode(int mode_count, drmModeModeInfoPtr mode
 
 static bool draw_pattern(struct bs_mapper *mapper, struct gbm_bo *bo)
 {
-	const uint32_t stride = gbm_bo_get_stride(bo);
+	uint32_t stride;
 	const uint32_t height = gbm_bo_get_height(bo);
-	const uint32_t bo_size = stride * height;
 	const uint32_t stripw = gbm_bo_get_width(bo) / 256;
 	const uint32_t striph = height / 4;
 
 	void *map_data;
-	uint8_t *bo_ptr = bs_mapper_map(mapper, bo, 0, &map_data);
+	uint8_t *bo_ptr = bs_mapper_map(mapper, bo, 0, &map_data, &stride);
 	if (bo_ptr == MAP_FAILED) {
 		bs_debug_error("failed to mmap buffer while drawing pattern");
 		return false;
 	}
+	const uint32_t bo_size = stride * height;
 
 	bool success = true;
 

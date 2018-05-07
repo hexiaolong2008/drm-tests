@@ -67,12 +67,12 @@ int main(int argc, char **argv)
 	}
 
 	void *map_data;
-	uint8_t *fb_ptr = bs_mapper_map(mapper, fb_bo, 0, &map_data);
+	uint32_t stride;
+	uint8_t *fb_ptr = bs_mapper_map(mapper, fb_bo, 0, &map_data, &stride);
 	if (fb_ptr == MAP_FAILED) {
 		bs_debug_error("failed to mmap frame buffer object");
 		return 1;
 	}
-	uint32_t stride = gbm_bo_get_stride(fb_bo);
 	for (size_t y = 0; y < mode->vdisplay; y++) {
 		for (size_t x = 0; x < mode->hdisplay; x++) {
 			// Solid blue fill

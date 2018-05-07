@@ -53,13 +53,14 @@ int main()
 	for (size_t frame_index = 0; frame_index < 10000; frame_index++) {
 		size_t fb_index = frame_index % 2;
 		struct gbm_bo *bo = bos[fb_index];
-		size_t bo_size = gbm_bo_get_stride(bo) * mode->vdisplay;
 		void *map_data;
-		char *ptr = bs_mapper_map(mapper, bo, 0, &map_data);
+		uint32_t stride;
+		char *ptr = bs_mapper_map(mapper, bo, 0, &map_data, &stride);
 		if (ptr == MAP_FAILED) {
 			bs_debug_error("failed to mmap gbm buffer object");
 			return 1;
 		}
+		size_t bo_size = stride * mode->vdisplay;
 
 		for (size_t i = 0; i < bo_size / 4; i++) {
 			ptr[i * 4 + 0] = (i + frame_index * 50) % 256;

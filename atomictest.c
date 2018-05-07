@@ -243,8 +243,9 @@ static int draw_to_plane(struct bs_mapper *mapper, struct atomictest_plane *plan
 		// everything else --> something
 		void *map_data;
 		uint16_t value = 0xF800;
-		void *addr = bs_mapper_map(mapper, bo, 0, &map_data);
-		uint32_t num_shorts = gbm_bo_get_plane_size(bo, 0) / sizeof(uint16_t);
+		uint32_t stride;
+		void *addr = bs_mapper_map(mapper, bo, 0, &map_data, &stride);
+		uint32_t num_shorts = stride * gbm_bo_get_height(bo) / sizeof(uint16_t);
 		uint16_t *pixel = (uint16_t *)addr;
 
 		CHECK(addr);

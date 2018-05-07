@@ -223,9 +223,9 @@ static bool test_case_draw_dma_buf(const struct test_case *tcase, struct bs_mapp
 	}
 	uint32_t width = gbm_bo_get_width(bo);
 	uint32_t height = gbm_bo_get_height(bo);
-	uint32_t stride = gbm_bo_get_stride(bo);
+	uint32_t stride;
 	void *map_data;
-	uint8_t *ptr = bs_mapper_map(mapper, bo, 0, &map_data);
+	uint8_t *ptr = bs_mapper_map(mapper, bo, 0, &map_data, &stride);
 	if (ptr == MAP_FAILED) {
 		bs_debug_error("failed to mmap gbm bo");
 		return false;

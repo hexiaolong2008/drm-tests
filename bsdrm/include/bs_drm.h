@@ -206,7 +206,8 @@ struct bs_mapper *bs_mapper_dma_buf_new();
 struct bs_mapper *bs_mapper_gem_new();
 struct bs_mapper *bs_mapper_dumb_new(int device_fd);
 void bs_mapper_destroy(struct bs_mapper *mapper);
-void *bs_mapper_map(struct bs_mapper *mapper, struct gbm_bo *bo, size_t plane, void **map_data);
+void *bs_mapper_map(struct bs_mapper *mapper, struct gbm_bo *bo, size_t plane, void **map_data,
+		    uint32_t *stride);
 void bs_mapper_unmap(struct bs_mapper *mapper, struct gbm_bo *bo, void *map_data);
 
 // draw.c
