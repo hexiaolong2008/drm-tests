@@ -16,6 +16,7 @@
  */
 
 #include <getopt.h>
+#include <sync/sync.h>
 
 #include "bs_drm.h"
 
@@ -84,7 +85,7 @@ static void page_flip_handler(int fd, unsigned int sequence, unsigned int tv_sec
 
 struct atomictest_property {
 	uint32_t pid;
-	uint32_t value;
+	uint64_t value;
 };
 
 struct atomictest_plane {
@@ -130,6 +131,7 @@ struct atomictest_crtc {
 	struct atomictest_plane *planes;
 	struct atomictest_property mode_id;
 	struct atomictest_property active;
+	struct atomictest_property out_fence_ptr;
 	struct atomictest_property ctm;
 	struct atomictest_property gamma_lut;
 	struct atomictest_property gamma_lut_size;
@@ -173,6 +175,20 @@ enum draw_format_type {
 	DRAW_LINES = 5,
 };
 // clang-format on
+
+static int drmModeCreatePropertyBlob64(int fd, const void *data, size_t length, uint64_t *id)
+{
+	uint32_t ctm_blob_id = 0;
+	int ret = drmModeCreatePropertyBlob(fd, data, length, &ctm_blob_id);
+	*id = ctm_blob_id;
+	return ret;
+}
+
+static int drmModeDestroyPropertyBlob64(int fd, uint64_t id)
+{
+	CHECK(id < (1ull << 32));
+	return drmModeDestroyPropertyBlob(fd, (uint32_t)id);
+}
 
 static int32_t get_format_idx(struct atomictest_plane *plane, uint32_t format)
 {
@@ -294,6 +310,7 @@ static int get_crtc_props(int fd, struct atomictest_crtc *crtc, drmModeObjectPro
 {
 	CHECK_RESULT(get_prop(fd, props, "MODE_ID", &crtc->mode_id));
 	CHECK_RESULT(get_prop(fd, props, "ACTIVE", &crtc->active));
+	CHECK_RESULT(get_prop(fd, props, "OUT_FENCE_PTR", &crtc->out_fence_ptr));
 
 	/*
 	 * The atomic API makes no guarantee a property is present in object. This test
@@ -342,6 +359,9 @@ int set_crtc_props(struct atomictest_crtc *crtc, drmModeAtomicReqPtr pset)
 	uint32_t id = crtc->crtc_id;
 	CHECK_RESULT(drmModeAtomicAddProperty(pset, id, crtc->mode_id.pid, crtc->mode_id.value));
 	CHECK_RESULT(drmModeAtomicAddProperty(pset, id, crtc->active.pid, crtc->active.value));
+	if (crtc->out_fence_ptr.value)
+		CHECK_RESULT(drmModeAtomicAddProperty(pset, id, crtc->out_fence_ptr.pid,
+						      crtc->out_fence_ptr.value));
 	if (crtc->ctm.pid)
 		CHECK_RESULT(drmModeAtomicAddProperty(pset, id, crtc->ctm.pid, crtc->ctm.value));
 	if (crtc->gamma_lut.pid)
@@ -998,6 +1018,33 @@ static int test_orientation(struct atomictest_context *ctx, struct atomictest_cr
 	return ret;
 }
 
+static int test_out_fence(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
+{
+	int ret = 0;
+	struct atomictest_plane *primary = NULL;
+
+	for (uint32_t i = 0; i < crtc->num_primary; i++) {
+		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
+		CHECK_RESULT(init_plane_any_format(ctx, primary, 0, 0, crtc->width, crtc->height,
+						   crtc->crtc_id, false));
+		break;
+	}
+
+	CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_LINES));
+	set_plane_props(primary, ctx->pset);
+	int out_fence_fd = 0;
+	crtc->out_fence_ptr.value = (uint64_t)&out_fence_fd;
+	set_crtc_props(crtc, ctx->pset);
+	ret |= test_and_commit(ctx, 1e6);
+	CHECK(out_fence_fd);
+        // |out_fence_fd| will signal when the currently scanned out buffers are replaced.
+        // In this case we're waiting with a timeout of 0 only to check that |out_fence_fd|
+        // is a valid fence.
+	CHECK(!sync_wait(out_fence_fd, 0));
+	close(out_fence_fd);
+	return ret;
+}
+
 static int test_plane_ctm(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
 {
 	int ret = 0;
@@ -1011,18 +1058,18 @@ static int test_plane_ctm(struct atomictest_context *ctx, struct atomictest_crtc
 		CHECK_RESULT(init_plane(ctx, overlay, DRM_FORMAT_XRGB8888, 0, 0, crtc->width,
 					crtc->height, crtc->crtc_id));
 
-		CHECK_RESULT(drmModeCreatePropertyBlob(ctx->fd, identity_ctm, sizeof(identity_ctm),
-						       &overlay->ctm.value));
+		CHECK_RESULT(drmModeCreatePropertyBlob64(
+		    ctx->fd, identity_ctm, sizeof(identity_ctm), &overlay->ctm.value));
 		set_plane_props(overlay, ctx->pset);
 		CHECK_RESULT(draw_to_plane(ctx->mapper, overlay, DRAW_LINES));
 		ret |= test_and_commit(ctx, 1e6);
-		CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, overlay->ctm.value));
+		CHECK_RESULT(drmModeDestroyPropertyBlob64(ctx->fd, overlay->ctm.value));
 
-		CHECK_RESULT(drmModeCreatePropertyBlob(ctx->fd, red_shift_ctm,
-						       sizeof(red_shift_ctm), &overlay->ctm.value));
+		CHECK_RESULT(drmModeCreatePropertyBlob64(
+		    ctx->fd, red_shift_ctm, sizeof(red_shift_ctm), &overlay->ctm.value));
 		set_plane_props(overlay, ctx->pset);
 		ret |= test_and_commit(ctx, 1e6);
-		CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, overlay->ctm.value));
+		CHECK_RESULT(drmModeDestroyPropertyBlob64(ctx->fd, overlay->ctm.value));
 
 		CHECK_RESULT(disable_plane(ctx, overlay));
 	}
@@ -1034,18 +1081,18 @@ static int test_plane_ctm(struct atomictest_context *ctx, struct atomictest_crtc
 
 		CHECK_RESULT(init_plane_any_format(ctx, primary, 0, 0, crtc->width, crtc->height,
 						   crtc->crtc_id, false));
-		CHECK_RESULT(drmModeCreatePropertyBlob(ctx->fd, identity_ctm, sizeof(identity_ctm),
-						       &primary->ctm.value));
+		CHECK_RESULT(drmModeCreatePropertyBlob64(
+		    ctx->fd, identity_ctm, sizeof(identity_ctm), &primary->ctm.value));
 		set_plane_props(primary, ctx->pset);
 		CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_LINES));
 		ret |= test_and_commit(ctx, 1e6);
-		CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, primary->ctm.value));
+		CHECK_RESULT(drmModeDestroyPropertyBlob64(ctx->fd, primary->ctm.value));
 
-		CHECK_RESULT(drmModeCreatePropertyBlob(ctx->fd, red_shift_ctm,
-						       sizeof(red_shift_ctm), &primary->ctm.value));
+		CHECK_RESULT(drmModeCreatePropertyBlob64(
+		    ctx->fd, red_shift_ctm, sizeof(red_shift_ctm), &primary->ctm.value));
 		set_plane_props(primary, ctx->pset);
 		ret |= test_and_commit(ctx, 1e6);
-		CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, primary->ctm.value));
+		CHECK_RESULT(drmModeDestroyPropertyBlob64(ctx->fd, primary->ctm.value));
 
 		CHECK_RESULT(disable_plane(ctx, primary));
 	}
@@ -1233,8 +1280,8 @@ static int test_crtc_ctm(struct atomictest_context *ctx, struct atomictest_crtc 
 	if (!crtc->ctm.pid)
 		return 0;
 
-	CHECK_RESULT(drmModeCreatePropertyBlob(ctx->fd, identity_ctm, sizeof(identity_ctm),
-					       &crtc->ctm.value));
+	CHECK_RESULT(drmModeCreatePropertyBlob64(ctx->fd, identity_ctm, sizeof(identity_ctm),
+						 &crtc->ctm.value));
 	set_crtc_props(crtc, ctx->pset);
 	for (uint32_t i = 0; i < crtc->num_primary; i++) {
 		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
@@ -1248,10 +1295,10 @@ static int test_crtc_ctm(struct atomictest_context *ctx, struct atomictest_crtc 
 		CHECK_RESULT(set_plane_props(primary, ctx->pset));
 	}
 
-	CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, crtc->ctm.value));
+	CHECK_RESULT(drmModeDestroyPropertyBlob64(ctx->fd, crtc->ctm.value));
 
-	CHECK_RESULT(drmModeCreatePropertyBlob(ctx->fd, red_shift_ctm, sizeof(red_shift_ctm),
-					       &crtc->ctm.value));
+	CHECK_RESULT(drmModeCreatePropertyBlob64(ctx->fd, red_shift_ctm, sizeof(red_shift_ctm),
+						 &crtc->ctm.value));
 	set_crtc_props(crtc, ctx->pset);
 	for (uint32_t i = 0; i < crtc->num_primary; i++) {
 		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
@@ -1264,7 +1311,7 @@ static int test_crtc_ctm(struct atomictest_context *ctx, struct atomictest_crtc 
 		CHECK_RESULT(disable_plane(ctx, primary));
 	}
 
-	CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, crtc->ctm.value));
+	CHECK_RESULT(drmModeDestroyPropertyBlob64(ctx->fd, crtc->ctm.value));
 
 	return ret;
 }
@@ -1273,7 +1320,7 @@ static void gamma_linear(struct drm_color_lut *table, int size)
 {
 	for (int i = 0; i < size; i++) {
 		float v = (float)(i) / (float)(size - 1);
-		v *= (float) GAMMA_MAX_VALUE;
+		v *= (float)GAMMA_MAX_VALUE;
 		table[i].red = (uint16_t)v;
 		table[i].green = (uint16_t)v;
 		table[i].blue = (uint16_t)v;
@@ -1304,7 +1351,7 @@ static int test_crtc_gamma(struct atomictest_context *ctx, struct atomictest_crt
 	    calloc(crtc->gamma_lut_size.value, sizeof(*gamma_table));
 
 	gamma_linear(gamma_table, crtc->gamma_lut_size.value);
-	CHECK_RESULT(drmModeCreatePropertyBlob(
+	CHECK_RESULT(drmModeCreatePropertyBlob64(
 	    ctx->fd, gamma_table, sizeof(struct drm_color_lut) * crtc->gamma_lut_size.value,
 	    &crtc->gamma_lut.value));
 	set_crtc_props(crtc, ctx->pset);
@@ -1324,7 +1371,7 @@ static int test_crtc_gamma(struct atomictest_context *ctx, struct atomictest_crt
 	CHECK_RESULT(drmModeDestroyPropertyBlob(ctx->fd, crtc->gamma_lut.value));
 
 	gamma_step(gamma_table, crtc->gamma_lut_size.value);
-	CHECK_RESULT(drmModeCreatePropertyBlob(
+	CHECK_RESULT(drmModeCreatePropertyBlob64(
 	    ctx->fd, gamma_table, sizeof(struct drm_color_lut) * crtc->gamma_lut_size.value,
 	    &crtc->gamma_lut.value));
 	set_crtc_props(crtc, ctx->pset);
@@ -1359,6 +1406,8 @@ static const struct atomictest_testcase cases[] = {
 	{ "video_overlay", test_video_overlay },
 	{ "orientation", test_orientation },
 	{ "video_underlay", test_video_underlay },
+	// TODO(dcastagna): Test in-fences
+	{ "out_fence", test_out_fence },
 	/* CTM stands for Color Transform Matrix. */
 	{ "plane_ctm", test_plane_ctm },
 	{ "crtc_ctm", test_crtc_ctm },
