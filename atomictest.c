@@ -16,6 +16,7 @@
  */
 
 #include <getopt.h>
+#include <pthread.h>
 #include <sync/sync.h>
 
 #include "bs_drm.h"
@@ -37,6 +38,11 @@
 	} while (0)
 
 #define CURSOR_SIZE 64
+
+// TODO(dcastagna): Remove these declarations once they're exported in a libsync header.
+int sw_sync_timeline_create(void);
+int sw_sync_timeline_inc(int fd, unsigned count);
+int sw_sync_fence_create(int fd, const char *name, unsigned value);
 
 // TODO(gsingh) This is defined in upstream libdrm -- remove when CROS libdrm is updated.
 #ifndef DRM_ROTATE_0
@@ -106,6 +112,7 @@ struct atomictest_plane {
 	struct atomictest_property src_w;
 	struct atomictest_property src_h;
 	struct atomictest_property type;
+	struct atomictest_property in_fence_fd;
 	struct atomictest_property rotation;
 	struct atomictest_property ctm;
 };
@@ -336,6 +343,7 @@ static int get_plane_props(int fd, struct atomictest_plane *plane, drmModeObject
 	CHECK_RESULT(get_prop(fd, props, "SRC_W", &plane->src_w));
 	CHECK_RESULT(get_prop(fd, props, "SRC_H", &plane->src_h));
 	CHECK_RESULT(get_prop(fd, props, "type", &plane->type));
+	CHECK_RESULT(get_prop(fd, props, "IN_FENCE_FD", &plane->in_fence_fd));
 
 	/*
 	 * The atomic API makes no guarantee a property is present in object. This test
@@ -383,6 +391,8 @@ int set_plane_props(struct atomictest_plane *plane, drmModeAtomicReqPtr pset)
 	CHECK_RESULT(drmModeAtomicAddProperty(pset, id, plane->src_y.pid, plane->src_y.value));
 	CHECK_RESULT(drmModeAtomicAddProperty(pset, id, plane->src_w.pid, plane->src_w.value));
 	CHECK_RESULT(drmModeAtomicAddProperty(pset, id, plane->src_h.pid, plane->src_h.value));
+	CHECK_RESULT(
+	    drmModeAtomicAddProperty(pset, id, plane->in_fence_fd.pid, plane->in_fence_fd.value));
 	if (plane->rotation.pid)
 		CHECK_RESULT(
 		    drmModeAtomicAddProperty(pset, id, plane->rotation.pid, plane->rotation.value));
@@ -1018,6 +1028,52 @@ static int test_orientation(struct atomictest_context *ctx, struct atomictest_cr
 	return ret;
 }
 
+static void *inc_timeline(void *user_data)
+{
+	int timeline_fd = (int)user_data;
+	uint32_t sleep_micro_secs = automatic ? 1e3 : 1e5;
+	usleep(sleep_micro_secs);
+	sw_sync_timeline_inc(timeline_fd, 1);
+	return NULL;
+}
+
+static int test_in_fence(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
+{
+	int ret = 0;
+	pthread_t inc_timeline_thread;
+	struct atomictest_plane *primary = NULL;
+
+	for (uint32_t i = 0; i < crtc->num_primary; i++) {
+		primary = get_plane(crtc, i, DRM_PLANE_TYPE_PRIMARY);
+		CHECK_RESULT(init_plane_any_format(ctx, primary, 0, 0, crtc->width, crtc->height,
+						   crtc->crtc_id, false));
+		break;
+	}
+
+	int timeline = sw_sync_timeline_create();
+	CHECK(fcntl(timeline, F_GETFD, 0) >= 0);
+	int in_fence = sw_sync_fence_create(timeline, "test_in_fence", 1);
+	CHECK(fcntl(in_fence, F_GETFD, 0) >= 0);
+
+	CHECK_RESULT(draw_to_plane(ctx->mapper, primary, DRAW_LINES));
+
+	primary->in_fence_fd.value = in_fence;
+	set_plane_props(primary, ctx->pset);
+	set_crtc_props(crtc, ctx->pset);
+
+	CHECK(
+	    !pthread_create(&inc_timeline_thread, NULL, inc_timeline, (void *)(uintptr_t)timeline));
+
+	ret |= test_and_commit(ctx, 1e6);
+	CHECK(!pthread_join(inc_timeline_thread, NULL));
+
+	ret |= test_and_commit(ctx, 1e6);
+	close(in_fence);
+	close(timeline);
+
+	return ret;
+}
+
 static int test_out_fence(struct atomictest_context *ctx, struct atomictest_crtc *crtc)
 {
 	int ret = 0;
@@ -1037,9 +1093,9 @@ static int test_out_fence(struct atomictest_context *ctx, struct atomictest_crtc
 	set_crtc_props(crtc, ctx->pset);
 	ret |= test_and_commit(ctx, 1e6);
 	CHECK(out_fence_fd);
-        // |out_fence_fd| will signal when the currently scanned out buffers are replaced.
-        // In this case we're waiting with a timeout of 0 only to check that |out_fence_fd|
-        // is a valid fence.
+	// |out_fence_fd| will signal when the currently scanned out buffers are replaced.
+	// In this case we're waiting with a timeout of 0 only to check that |out_fence_fd|
+	// is a valid fence.
 	CHECK(!sync_wait(out_fence_fd, 0));
 	close(out_fence_fd);
 	return ret;
@@ -1406,7 +1462,7 @@ static const struct atomictest_testcase cases[] = {
 	{ "video_overlay", test_video_overlay },
 	{ "orientation", test_orientation },
 	{ "video_underlay", test_video_underlay },
-	// TODO(dcastagna): Test in-fences
+	{ "in_fence", test_in_fence },
 	{ "out_fence", test_out_fence },
 	/* CTM stands for Color Transform Matrix. */
 	{ "plane_ctm", test_plane_ctm },

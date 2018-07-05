@@ -11,7 +11,7 @@ PC_DEPS = libdrm egl gbm
 PC_CFLAGS := $(shell $(PKG_CONFIG) --cflags $(PC_DEPS))
 PC_LIBS := $(shell $(PKG_CONFIG) --libs $(PC_DEPS))
 
-DRM_LIBS = -lGLESv2 -lsync
+DRM_LIBS = -lGLESv2
 CFLAGS += $(PC_CFLAGS) -DEGL_EGLEXT_PROTOTYPES -DGL_GLEXT_PROTOTYPES
 CFLAGS += -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
 LDLIBS += $(PC_LIBS)
@@ -50,6 +50,7 @@ CC_BINARY(swrast_test): LDLIBS += -lGLESv2
 CC_BINARY(atomictest): atomictest.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 CC_BINARY(atomictest): CFLAGS += -DUSE_ATOMIC_API
 CC_BINARY(atomictest): LDLIBS += $(DRM_LIBS)
+CC_BINARY(atomictest): LDLIBS +=  -lsync -lpthread
 
 CC_BINARY(gamma_test): gamma_test.o CC_STATIC_LIBRARY(libbsdrm.pic.a)
 CC_BINARY(gamma_test): LDLIBS += -lm $(DRM_LIBS)
